@@ -1,7 +1,7 @@
 const fold = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
 export function enhanceFilters(){
   let closeActive=()=>{};
-  for(const select of document.querySelectorAll('.filters select')){
+  for(const select of document.querySelectorAll('.filters select, #demandMonths')){
     const name=select.getAttribute('aria-label');
     const search=['product','stockProduct','statementCustomer'].includes(select.id) || select.length>15;
     const input=document.createElement('input');

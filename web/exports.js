@@ -63,7 +63,16 @@ async function pdf(r,name,brand){
   const context=doc.splitTextToSize([r.range,r.currency,r.filters,'Generado '+stamp(),r.note].filter(Boolean).join('  |  '),pageW-28);
   doc.text(context,14,40);
   const options={margin,theme:'striped',showHead:'everyPage',rowPageBreak:'avoid',styles:{font:'helvetica',fontSize:9,cellPadding:2,overflow:'linebreak'},headStyles:{fillColor:brand.accent,textColor:brand.foreground},alternateRowStyles:{fillColor:brand.paper}};
-  doc.autoTable({...options,startY:43+context.length*4,head:[['Resumen',r.currency?'Importe':'Cantidad']],body:r.summary.map(([k,v])=>[k,r.currency?moneyText(v,r.currency):String(v)]),columnStyles:{1:{halign:'right'}}});
+  let summaryY=43+context.length*4;
+  let breakdown=r.summary;
+  if(r.headlineBalances){
+    doc.autoTable({...options,startY:summaryY,head:[r.headlineBalances.map(([label])=>label)],
+      body:[r.headlineBalances.map(([,value])=>moneyText(value,r.currency))],bodyStyles:{fontSize:16,fontStyle:'bold',textColor:brand.accent}});
+    summaryY=doc.lastAutoTable.finalY+4;
+    const featured=new Set(r.headlineBalances.map(([label])=>label));
+    breakdown=breakdown.filter(([label])=>!featured.has(label));
+  }
+  doc.autoTable({...options,startY:summaryY,head:[[r.headlineBalances?'Desglose del saldo':'Resumen',r.currency?'Importe':'Cantidad']],body:breakdown.map(([k,v])=>[k,r.currency?moneyText(v,r.currency):String(v)]),columnStyles:{1:{halign:'right'}}});
   for(const t of r.tables){
     let y=doc.lastAutoTable.finalY+9;
     if(y>168){doc.addPage();y=32}

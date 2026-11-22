@@ -333,8 +333,9 @@ try{
   document.querySelectorAll('.filters select').forEach(s=>s.onchange=render);
   document.querySelectorAll('[data-module]').forEach(b=>b.onclick=()=>{if(!data.modules.includes(b.dataset.module))return;if(b.dataset.module==='clients'&&moduleName!=='clients')resetMap();moduleName=b.dataset.module;render()});
   enhanceFilters();
-  for(const id of ['leadDays','safetyUnits','demandMonths','stockPriority'])$(id).oninput=render;
+  for(const id of ['leadDays','safetyUnits','stockPriority'])$(id).oninput=render;
   render();
+  $('demandMonths').onchange=render;
   initTour({user:data.company[0].id+'.'+data.user+'.'+data.plan,modules:data.modules,
     state:()=>({mod:moduleName,tab:moduleName==='sales'?salesTab:moduleName==='ar'?arTab:inventoryTab,
       salesTab,arTab,inventoryTab}),
@@ -351,7 +352,7 @@ function renderStatement(filtered,period){
   const note=s.missing.length?'Provisional · Falta '+s.missing.join(' e '):'Historial completo al corte';
   const range=rangeText(start,end);
   const tables=statementTables(s);
-  viewReport={...context('Estado de cuenta · '+name,range),note,summary:s.summary,tables};
+  viewReport={...context('Estado de cuenta · '+name,range),note,summary:s.summary,headlineBalances:s.summary.slice(-2),tables};
   const overview='<div class="statement-focus">'+s.summary.slice(-2).map(([k,v])=>'<div><span>'+esc(k)+'</span><strong>'+money(v)+'</strong></div>').join('')+'</div><details class="statement-breakdown"><summary>Desglose del saldo</summary><div class="statement-numbers">'+s.summary.slice(0,-2).map(([k,v])=>'<div><span>'+esc(k)+'</span><b>'+money(v)+'</b></div>').join('')+'</div></details>';
   function movementLink(e){
     const open=action(()=>openRows(e.reference,[{...e.doc,value:e.delta}],true,'','Movimiento del '+day(e.date),e.date));

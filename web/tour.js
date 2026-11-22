@@ -12,6 +12,7 @@ const subviews={
 export function initTour({user,modules,state,navigate,restore}){
   const $=id=>document.getElementById(id);
   const key='ora.tour.v1.'+user;
+  const visible=e=>e.getClientRects().length>0&&getComputedStyle(e).visibility==='visible';
   let progress={};
   try{progress=JSON.parse(localStorage.getItem(key))||{}}catch{}
   const save=()=>{try{localStorage.setItem(key,JSON.stringify(progress))}catch{}};
@@ -48,7 +49,7 @@ export function initTour({user,modules,state,navigate,restore}){
     while(index>=0&&index<steps.length){
       const [mod,selector,title,text,tab]=steps[index];
       if(mod)navigate(mod,tab);
-      target=[...document.querySelectorAll(selector)].find(e=>e.checkVisibility()&&e.getBoundingClientRect().height>0);
+      target=[...document.querySelectorAll(selector)].find(e=>visible(e)&&e.getBoundingClientRect().height>0);
       if(target){
         target.scrollIntoView({block:'nearest',behavior:'instant'});
         $('tourTitle').textContent=title;$('tourText').textContent=text;
@@ -69,8 +70,9 @@ export function initTour({user,modules,state,navigate,restore}){
       if(matchMedia('(max-width:800px)').matches&&!$('mobileNav').open)$('mobileNav').showModal();
       $('accountMenu').open=true;
     }
-    const fallback=$('navOpen').checkVisibility()?$('navOpen'):$('accountMenu').querySelector('summary');
-    (origin?.isConnected&&origin.checkVisibility()?origin:fallback).focus();
+    const fallback=visible($('navOpen'))?$('navOpen'):$('accountMenu').querySelector('summary');
+    (origin?.isConnected&&visible(origin)?origin:fallback).focus({preventScroll:true});
+    if(previous)window.scrollTo({left:previous.scroll[0],top:previous.scroll[1],behavior:'instant'});
   }
   function start(which){
     course=which;steps=sequence(which);index=Math.min(progress[which]?.step||0,steps.length-1);
@@ -78,7 +80,7 @@ export function initTour({user,modules,state,navigate,restore}){
     showStep(1);
   }
   function open(menu){
-    previous=state();origin=menu?$('openTour'):$('tourStart');fromMenu=menu;
+    previous={...state(),scroll:[scrollX,scrollY]};origin=menu?$('openTour'):$('tourStart');fromMenu=menu;
     $('accountMenu').open=false;if($('mobileNav').open)$('mobileNav').close();
     dialog.showModal();
     if(!menu){start('general');return}
@@ -103,11 +105,11 @@ export function initTour({user,modules,state,navigate,restore}){
   dialog.oncancel=e=>{e.preventDefault();finish(false)};
   dialog.addEventListener('keydown',e=>{
     if(e.key!=='Tab')return;
-    const buttons=[...card.querySelectorAll('button:not(:disabled)')].filter(b=>b.checkVisibility());
+    const buttons=[...card.querySelectorAll('button:not(:disabled)')].filter(b=>visible(b));
     const first=buttons[0],last=buttons.at(-1);
     if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
     else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
   });
-  window.addEventListener('resize',()=>{if(!dialog.open||!target)return;if(!target.checkVisibility())showStep(1);else position()});
+  window.addEventListener('resize',()=>{if(!dialog.open||!target)return;if(!visible(target))showStep(1);else position()});
   window.addEventListener('scroll',position,true);
 }

@@ -228,4 +228,7 @@ button.hrow:hover,.directory-row:hover,.directory-row:focus-visible,tr:focus-wit
 #courseList{display:grid;gap:5px;margin:12px 0}#courseList button{text-align:left}#tourCard button:hover:not(:disabled){border-color:var(--plum)}#tourCard button:disabled{opacity:.45}
 .statement-focus{display:flex;gap:clamp(25px,6vw,100px);flex-wrap:wrap;margin:16px 0}.statement-focus span,.statement-focus strong{display:block}.statement-focus strong{font-variant-numeric:tabular-nums;font-size:clamp(22px,3vw,38px);font-weight:600;color:var(--plum)}.statement-focus>div+div strong{font-size:clamp(20px,2.5vw,32px)}
 .statement-breakdown{padding:10px 0;margin:0 0 22px;border-block:1px solid var(--line)}.statement-breakdown summary{color:var(--plum);cursor:pointer}.statement-breakdown~.panel{margin:18px 0}
+#restockControls label:has(#demandMonths){position:relative}
+#demandMonths-control{min-width:10em;padding-right:26px;cursor:pointer}
+#restockControls .chevron{position:absolute;right:9px;bottom:14px}
 .restock-table{overflow-x:auto}.restock-table td:nth-child(n+5):nth-child(-n+10),.restock-table th:nth-child(n+5):nth-child(-n+10){text-align:right;font-variant-numeric:tabular-nums}

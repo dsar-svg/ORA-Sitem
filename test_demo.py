@@ -34,6 +34,13 @@ class DemoTests(unittest.TestCase):
             sync(self.path,"andina",Mock(snapshot=lambda:bad))
         self.assertEqual(before,self.tables())
 
+    def test_daily_stock_coverage_is_scoped_and_reconciles(self):
+        state = read_model(self.path)
+        oil = [d["availability"] for d in state["stock_day"] if d["cut"]=="CUT-CCS-2-2026-10"]
+        self.assertEqual([oil.count(kind) for kind in ("full","partial","out")], [24,1,6])
+        self.assertFalse(any(d["cut"]=="CUT-VAL-4-2026-10" for d in state["stock_day"]))
+        self.assertNotIn("stock_day", read_model(self.path, include_inventory=False))
+
     def test_company_binding(self):
         other = Demo().snapshot()
         other["company"] = [("otra","Otra empresa","demo-v1")]

@@ -27,6 +27,7 @@ DIMENSIONS = {
     "location": "customer,zone,latitude,longitude,precision",
 }
 REPLENISHMENT = {
+    "stock_day":"cut,posted,availability",
     "stock_policy":"cut,reserved,lead_days,safety,sales_complete,receipts_complete",
     "inbound":"id,cut,arrival,open_units,state",
 }
@@ -69,6 +70,9 @@ CREATE TABLE IF NOT EXISTS history_coverage(id INTEGER PRIMARY KEY CHECK(id=1),
 CREATE TABLE IF NOT EXISTS stock_policy(cut TEXT PRIMARY KEY REFERENCES stock_cut(id),
  reserved INTEGER CHECK(reserved>=0),lead_days INTEGER CHECK(lead_days>=0),safety INTEGER CHECK(safety>=0),
  sales_complete INTEGER NOT NULL CHECK(sales_complete IN (0,1)),receipts_complete INTEGER NOT NULL CHECK(receipts_complete IN (0,1)));
+CREATE TABLE IF NOT EXISTS stock_day(cut TEXT NOT NULL REFERENCES stock_cut(id),
+ posted TEXT NOT NULL,availability TEXT NOT NULL CHECK(availability IN ('full','partial','out')),
+ PRIMARY KEY(cut,posted));
 CREATE TABLE IF NOT EXISTS inbound(id TEXT PRIMARY KEY,cut TEXT NOT NULL REFERENCES stock_cut(id),
  arrival TEXT NOT NULL,open_units INTEGER NOT NULL CHECK(open_units>=0),state TEXT NOT NULL CHECK(state IN ('confirmed','draft','cancelled')));
 CREATE TABLE IF NOT EXISTS sync(completed TEXT NOT NULL);

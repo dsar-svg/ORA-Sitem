@@ -7,7 +7,7 @@ import sqlite3
 from urllib.parse import urlsplit
 from access import roster, identity, basic_scope
 from demo import Demo
-from model import read_model, sync
+from model import SCHEMA, read_model, sync
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.getenv("ORA_DATA_DIR", ROOT / "data")) / "andina.sqlite3"
@@ -29,10 +29,6 @@ if PLAN not in PLANS:
 
 USERS = roster(PLAN)
 BRANCH = os.getenv("ORA_BRANCH","Caracas")
-
-def needs_demo_upgrade():
-    with sqlite3.connect(DATABASE) as db:
-        return not db.execute("SELECT 1 FROM sqlite_master WHERE name='stock_policy'").fetchone()
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -80,9 +76,13 @@ if __name__ == "__main__":
     parser.add_argument("command", choices=["demo","serve"], default="serve", nargs="?")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
-    if args.command == "demo" or not DATABASE.exists() or needs_demo_upgrade():
+    if args.command == "demo" or not DATABASE.exists():
         sync(DATABASE,"andina",Demo())
         print("Datos sintéticos cargados.",flush=True)
+    else:
+        # Historical snapshots without daily observations keep their original data.
+        with sqlite3.connect(DATABASE) as db:
+            db.executescript(SCHEMA)
     if args.command == "serve":
         server = ThreadingHTTPServer(("127.0.0.1",args.port), Handler)
         print(f"ORA disponible en http://127.0.0.1:{server.server_port}",flush=True)
