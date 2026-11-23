@@ -30,7 +30,8 @@ const monthDate = month => new Date(month+'-15T12:00:00Z');
 const monthName = month => new Intl.DateTimeFormat('es-VE',{month:'long',year:'numeric',timeZone:'UTC'}).format(monthDate(month));
 const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
 const day = s => s.split('-').reverse().join('/');
-const colors = ['var(--plum)','var(--muted)','var(--peach)'];
+// Data reads in ink and sand; the action colour is reserved for what can be pressed.
+const colors = ['var(--data)','var(--muted)','var(--data-prev)'];
 let data, opener, docs, moduleName='sales', actions=[];
 let ledgerDocs;
 const requested = new URLSearchParams(location.search);
@@ -79,7 +80,7 @@ function reportTable(headers,rows){
   return '<div class="table-wrap"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
 }
 function linkRows(label,rows,ar=false,range){
-  return '<button class="link" data-a="'+action(()=>openRows(label,rows,ar,'',range))+'">'+esc(label)+' ↗</button>';
+  return '<button class="link" data-a="'+action(()=>openRows(label,rows,ar,'',range))+'">'+esc(label)+'</button>';
 }
 function action(fn) {actions.push(fn);return actions.length-1}
 function showDetail(title,kind,body){
@@ -106,7 +107,7 @@ function openRows(title,rows,receivables=moduleName==='ar',extra='',range,asOf=l
 }
 function drill(name,rows,range){return action(()=>openRows(name,rows,moduleName==='ar','',range))}
 function kpi(title,value,sub,symbol,rows,primary=false){
-  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span><span class="arrow">↗</span><strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span></button>';
+  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span><span class="arrow"></span><strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span></button>';
 }
 function panel(title,sub,body){return '<article class="panel"><h2>'+title+'</h2><p class="hint">'+esc(sub)+'</p>'+body+'</article>'}
 function dot(color){return '<i class="dot" style="background:'+color+'"></i>'}
@@ -156,13 +157,13 @@ function distribution(rows){
   return g.map(k=>horizontal(k.name,money(k.value)+' · '+(total?pct(k.value/total*100):'—'),k.value,max,drill(k.name,k.docs))).join('') || '<p class="empty">Sin movimientos.</p>';
 }
 function horizontal(name,value,n,max,id,highlight=false){
-  return '<button class="hrow '+(highlight?'priority':'')+'" data-a="'+id+'"><div><strong>'+esc(name)+'</strong><b>'+esc(value)+' ↗</b></div><span class="track"><i style="width:'+Math.abs(n)/max*100+'%"></i></span></button>';
+  return '<button class="hrow '+(highlight?'priority':'')+'" data-a="'+id+'"><div><strong>'+esc(name)+'</strong><b>'+esc(value)+'</b></div><span class="track"><i style="width:'+Math.abs(n)/max*100+'%"></i></span></button>';
 }
 function breakdown(title,label,entries,total){
   const ar=moduleName==='ar';
   return panel(title,'Selecciona una fila para consultar sus documentos.','<div class="table-wrap"><table><thead><tr><th>'+label+'</th><th class="num">Documentos</th><th class="num">Participación</th><th class="num">Importe</th>'+(ar?'<th class="num">Vencido</th>':'')+'<th>Detalle</th></tr></thead><tbody>'+entries.map(g=>{
     const share=total?g.value/total*100:0;
-    return '<tr><td>'+esc(g.name)+'</td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(overdue)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos ↗</button></td></tr>';
+    return '<tr><td>'+esc(g.name)+'</td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(overdue)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos</button></td></tr>';
   }).join('')+'</tbody></table></div>'+(entries.length?'':'<p class="empty">Sin movimientos para estos filtros.</p>'));
 }
 function render(){
@@ -333,7 +334,7 @@ function fitNumbers(){
   document.querySelectorAll('.kpi strong,.statement-focus strong').forEach(el=>{
     el.style.fontSize='';
     let size=parseFloat(getComputedStyle(el).fontSize);
-    while(el.scrollWidth>el.clientWidth+1&&size>12){size-=1;el.style.fontSize=size+'px'}
+    while(el.scrollWidth>el.clientWidth&&size>12){size-=1;el.style.fontSize=size+'px'}
   });
 }
 new MutationObserver(()=>requestAnimationFrame(fitNumbers)).observe($('dashboard'),{childList:true});
@@ -434,7 +435,7 @@ function renderStatement(filtered,period){
   const overview='<div class="statement-focus">'+s.summary.slice(-2).map(([k,v])=>'<div><span>'+esc(k)+'</span><strong>'+money(v)+'</strong></div>').join('')+'</div><details class="statement-breakdown"><summary>Desglose del saldo</summary><div class="statement-numbers">'+s.summary.slice(0,-2).map(([k,v])=>'<div><span>'+esc(k)+'</span><b>'+money(v)+'</b></div>').join('')+'</div></details>';
   function movementLink(e){
     const open=action(()=>openRows(e.reference,[{...e.doc,value:e.delta}],true,'','Movimiento del '+day(e.date),e.date));
-    return '<button class="link" data-a="'+open+'">'+esc(e.reference)+' ↗</button>';
+    return '<button class="link" data-a="'+open+'">'+esc(e.reference)+'</button>';
   }
   const movementRows=s.events.map(e=>[day(e.date),esc(e.label),movementLink(e),esc(e.doc.number),money(Math.max(0,e.delta)),money(Math.max(0,-e.delta)),money(e.balance)]);
   const open=s.open.map(d=>[linkRows(d.number,[d],true,'Corte '+day(end)),day(d.issued),day(d.due),d.payment?'Pago sin aplicar':d.days>0?'Vencido':'Por vencer',money(d.value)]);

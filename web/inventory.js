@@ -80,7 +80,7 @@ export function renderInventory(data,filters,ui){
     });
     return '<th class="'+(['closing','out','turns'].includes(key)?'num':'')+'" aria-sort="'+(active?(sort.direction===1?'ascending':'descending'):'none')+'"><button data-sort="'+key+'" data-a="'+id+'">'+label+' '+(active?(sort.direction===1?'↑':'↓'):'↕')+'</button></th>';
   }).join('');
-  const body=rows.map(r=>'<tr><td>'+esc(r.sku)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.warehouseName)+'</td><td class="num">'+fmt(r.closing)+' '+esc(r.unit)+'</td><td class="num">'+fmt(r.out)+'</td><td class="num">'+rotation(r.turns)+'</td><td>'+esc(r.status)+'</td><td><button class="link" data-a="'+action(()=>movements(r))+'">Movimientos ↗</button></td></tr>').join('');
+  const body=rows.map(r=>'<tr><td>'+esc(r.sku)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.warehouseName)+'</td><td class="num">'+fmt(r.closing)+' '+esc(r.unit)+'</td><td class="num">'+fmt(r.out)+'</td><td class="num">'+rotation(r.turns)+'</td><td>'+esc(r.status)+'</td><td><button class="link" data-a="'+action(()=>movements(r))+'">Movimientos</button></td></tr>').join('');
   return '<div class="kpis">'+summary('Agotados',rows.filter(r=>r.closing<=0).length,'Referencias por almacén')+
     summary('Baja rotación',rows.filter(r=>r.turns!=null && r.turns<0.5).length,'Menos de 0,5 vueltas en el mes')+
     summary('Sin salidas',rows.filter(r=>!r.sold).length,'Sin despachos de venta')+'</div><div class="panels">'+

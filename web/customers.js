@@ -23,7 +23,7 @@ export function customers(data,docs,filter,ui){
     const top=groups(lines,'product')[0];
     const invoiceCount=c.sales.filter(d=>d.sign===1).length;
     const back=detailLink('← Volver a la ficha',()=>profile(c));
-    const documents=(label,rows,cartera=false)=>detailLink(label+' ↗',()=>openRows(c.name+' · '+label,rows,cartera,back));
+    const documents=(label,rows,cartera=false)=>detailLink(label+'',()=>openRows(c.name+' · '+label,rows,cartera,back));
     const section=(title,items,extra='')=>'<section class="profile-section"><h3>'+esc(title)+'</h3><dl>'+items+'</dl>'+extra+'</section>';
     let body=section('Datos del cliente',field('Código',p.code??c.id)+field('Identificación fiscal',p.tax_id)+field('Zona',c.zone)+
       field('Dirección',p.address)+field('Contacto',p.contact)+field('Correo',p.email));
@@ -48,7 +48,7 @@ export function customers(data,docs,filter,ui){
     const initials=c.name.split(/\s+/).slice(0,2).map(w=>w[0]).join('');
     return '<button class="directory-card directory-row" data-a="'+action(()=>profile(c))+'"><span class="row-name"><span class="monogram">'+esc(initials)+'</span><strong>'+esc(c.name)+'</strong></span><span class="row-city">'+esc(c.zone)+'</span>'+
       '<span class="row-number"><small>Ventas</small>'+money(sum(c.sales))+'</span>'+
-      (ar?'<span class="row-number"><small>Pendiente</small>'+money(sum(c.ar))+'</span>':'')+'<span class="row-open" aria-hidden="true">↗</span></button>';
+      (ar?'<span class="row-number"><small>Pendiente</small>'+money(sum(c.ar))+'</span>':'')+'<span class="row-open" aria-hidden="true"></span></button>';
   }
   const grid=rows=>rows.length?'<div class="client-list '+(ar?'with-ar':'')+'"><div class="directory-labels" aria-hidden="true"><span>Cliente</span><span>Ciudad o zona</span><span>Ventas del período</span>'+(ar?'<span>Saldo pendiente</span>':'')+'<span></span></div>'+rows.map(card).join('')+'</div>':'<p class="empty">Sin clientes para estos filtros.</p>';
   function tab(id,label){

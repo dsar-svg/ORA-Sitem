@@ -117,8 +117,8 @@ export function setupNavigation(){
   const narrow=matchMedia('(max-width:800px)');
   function place(){
     if(drawer.open)drawer.close();
-    if(narrow.matches)drawer.append(sidebar);
-    else document.body.prepend(sidebar);
+    // Phones show the sidebar as a bottom tab bar, so it never moves into the drawer.
+    document.body.prepend(sidebar);
   }
   $('navOpen').onclick=()=>drawer.showModal();
   $('navClose').onclick=()=>drawer.close();

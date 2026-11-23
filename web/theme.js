@@ -1,7 +1,8 @@
+// Accent variants inside one warm world: only the action colour and the previous-period sand change.
 const palettes = {
-  Foco:{accent:'#532b43',secondary:'#e8ae89',paper:'#f8f6f1',surface:'#fffdfa',nav:'#432438'},
-  Bosque:{accent:'#27634f',secondary:'#a8c997',paper:'#f2f5ef',surface:'#fcfdf8',nav:'#203e34'},
-  Atlántico:{accent:'#315882',secondary:'#92c3d1',paper:'#f0f4f7',surface:'#fcfdff',nav:'#23384e'}
+  Coral:{accent:'#e8532a',secondary:'#e8cfb6',paper:'#fbf4ec',surface:'#ffffff',nav:'#ffffff'},
+  Cobalto:{accent:'#2f5fd6',secondary:'#d3dbe8',paper:'#f5f3ef',surface:'#ffffff',nav:'#ffffff'},
+  Pino:{accent:'#1f7a55',secondary:'#cfe0d2',paper:'#f4f4ee',surface:'#ffffff',nav:'#ffffff'}
 };
 const rgb = color => [1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
 function luminance(c){
@@ -20,8 +21,8 @@ function accessibleAccent(input,p){
   return color;
 }
 export function initAppearance(profile='demo-local'){
-  const $=id=>document.getElementById(id), key='ora.appearance.v1.'+profile;
-  let choice={palette:'Foco',accent:palettes.Foco.accent};
+  const $=id=>document.getElementById(id), key='ora.appearance.v2.'+profile;
+  let choice={palette:'Coral',accent:palettes.Coral.accent};
   try{
     const saved=JSON.parse(localStorage.getItem(key));
     if(saved && Object.hasOwn(palettes,saved.palette) && /^#[0-9a-f]{6}$/i.test(saved.accent)) choice=saved;
@@ -40,7 +41,7 @@ export function initAppearance(profile='demo-local'){
     for(const [k,v] of Object.entries(vars)){
       document.documentElement.style.setProperty('--'+k,v);
     }
-    try{localStorage.setItem('ora.appearance.boot',JSON.stringify(vars))}catch{}
+    try{localStorage.setItem('ora.appearance.boot2',JSON.stringify(vars))}catch{}
     document.documentElement.dataset.palette=choice.palette;
     document.querySelectorAll('[data-palette]').forEach(b=>{
       if(b.tagName==='BUTTON') b.setAttribute('aria-pressed',b.dataset.palette===choice.palette);
@@ -54,7 +55,7 @@ export function initAppearance(profile='demo-local'){
   $('closeAppearance').onclick=()=>$('appearance').close();
   $('appearance').addEventListener('close',()=>$('accountMenu').querySelector('summary').focus());
   $('accent').oninput=e=>apply({...choice,accent:e.target.value});
-  $('resetTheme').onclick=()=>apply({palette:'Foco',accent:palettes.Foco.accent});
+  $('resetTheme').onclick=()=>apply({palette:'Coral',accent:palettes.Coral.accent});
   apply(choice,false);
 }
 /* Freeze the resolved appearance at download time for both file formats. */
