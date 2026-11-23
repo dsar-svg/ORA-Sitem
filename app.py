@@ -215,6 +215,15 @@ class Handler(BaseHTTPRequestHandler):
                 for module in ("sales","ar","clients","inventory"):
                     if module not in PLANS[PLAN]:
                         content = content.replace(f'data-module="{module}"'.encode(), f'data-module="{module}" hidden'.encode())
+                # Identity and source are known before /api/demo, so the header and profile paint final values.
+                plan_name = {"basico":"Básico","intermedio":"Intermedio","avanzado":"Avanzado"}[PLAN]
+                fills = {'<span>Perfil de demo</span>': f'<span>{escape(user)}</span>' if user and user != "demo-local" else None,
+                         '<strong id="company">ORA</strong>': f'<strong id="company">{escape(account.company)}</strong>' if account else None,
+                         '<span class="badge"></span>': f'<span class="badge">{"Odoo" if SALES_MONTH else "Demo"} · {plan_name}</span>',
+                         '<body>': '<body data-live="1">' if SALES_MONTH else None}
+                for marker, value in fills.items():
+                    if value:
+                        content = content.replace(marker.encode(), value.encode())
         else:
             self.send_error(404)
             return

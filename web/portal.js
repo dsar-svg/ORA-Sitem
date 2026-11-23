@@ -42,12 +42,13 @@ function markLoading(view){
   $('title').textContent=viewTitles[view]??viewTitles.sales;$('subtitle').textContent='';
   $('dashboard').innerHTML=loaderHTML;$('reportBar').hidden=true;
   $('sync').classList.add('loading');$('sync').textContent='Cargando datos…';
+  document.body.classList.add('loading');
 }
 function openLiveView(view,month){
   markLoading(view);
   const target = new URL(location.href);
   target.searchParams.set('view',view);
-  target.searchParams.set('month',month);
+  if(month)target.searchParams.set('month',month);
   location.assign(target);
 }
 let salesTab='summary', arTab='summary', inventoryTab='summary', renderRestock, viewReport, detailReport;
@@ -338,6 +339,8 @@ function fitNumbers(){
 new MutationObserver(()=>requestAnimationFrame(fitNumbers)).observe($('dashboard'),{childList:true});
 window.addEventListener('resize',()=>requestAnimationFrame(fitNumbers));
 if(viewTitles[requestedView])markLoading(requestedView);
+// Live mode reloads per section; keep the sidebar usable while this section's data is still arriving.
+if(document.body.dataset.live)document.querySelectorAll('[data-module]').forEach(b=>b.onclick=()=>openLiveView(b.dataset.module,requested.get('month')));
 
 $('close').onclick=()=>$('detail').close();
 try{
@@ -418,7 +421,7 @@ try{
   });
 }catch(e){$('sync').textContent='Error de carga';$('dashboard').textContent=e.message||'No se pudo cargar el reporte.';
   if(location.search){const back=document.createElement('a');back.href='/';back.textContent='Volver a Ventas';$('dashboard').append(' ',back)}
-  console.error(e)}finally{$('sync').classList.remove('loading')}
+  console.error(e)}finally{$('sync').classList.remove('loading');document.body.classList.remove('loading')}
 function renderStatement(filtered,period){
   const currency=$('currency').value,id=$('statementCustomer').value,name=selected('statementCustomer');
   if(!id){$('dashboard').textContent='Selecciona un cliente.';return}

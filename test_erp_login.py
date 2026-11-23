@@ -74,6 +74,10 @@ class LoginTests(unittest.TestCase):
         token=cookie.split(";")[0]
         report=json.loads(self.request("/api/demo",cookie=token)[2])
         self.assertEqual((report["user"],report["erpCompany"]),(self.email,"Empresa de prueba"))
+        page=self.request("/",cookie=token)[2].decode()
+        self.assertIn("<span>"+self.email+"</span>",page)
+        self.assertIn('<strong id="company">Empresa de prueba</strong>',page)
+        self.assertNotIn("Perfil de demo",page)
         self.assertEqual(self.request("/logout",{},token)[0],303)
         self.assertEqual(self.request("/api/demo",cookie=token)[0],401)
 
