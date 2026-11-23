@@ -138,7 +138,7 @@ export function customerMap(all,filter,ui){
   })+'">'+label+'</button>';
   const zoom=(factor,label,symbol)=>'<button aria-label="'+label+'" data-focus="'+label+'" data-a="'+action(()=>{const next=Math.min(16,Math.max(.5,view.zoom*factor));view.panX*=next/view.zoom;view.panY*=next/view.zoom;view.zoom=next;redraw(label)})+'">'+symbol+'</button>';
   const precision=city?(located.some(c=>c.precision==='municipality')?'ciudad o municipio':'ciudad'):'estado';
-  const html='<article class="panel geo-panel"><h2>Distribución geográfica</h2><p class="hint">Agrupación por '+precision+' · Ubicaciones sintéticas</p>'+
+  const html='<article class="panel geo-panel"><h2>Distribución geográfica</h2><p class="hint">Agrupación por '+precision+' · '+(filter.live?'Ubicaciones registradas en Odoo':'Ubicaciones sintéticas')+'</p>'+
     '<div class="mapbar"><div class="mapmode">'+toggle('city','Ciudades')+toggle('state','Estados')+'</div><span>'+located.length+' de '+all.length+' clientes en el mapa</span></div>'+
     '<div class="map venezuela"><div class="maptools">'+zoom(.5,'Alejar mapa','−')+zoom(2,'Acercar mapa','+')+'<button class="country" data-focus="national" data-a="'+action(clear)+'">Venezuela</button></div>'+
     '<svg tabindex="0" viewBox="0 0 '+W+' '+H+'" aria-label="Mapa de Venezuela. Arrastra o usa las flechas para mover. Agrupación por '+precision+'"><g class="pan-layer"><g transform="'+projection.transform+'">'+shapes+'</g>'+pins+'</g></svg></div>'+

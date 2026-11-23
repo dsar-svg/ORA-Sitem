@@ -27,7 +27,7 @@ export function initTour({user,modules,state,navigate,restore}){
     const list=[];
     if(which==='general'){
       list.push([null,'#sidebar nav, #navOpen','Navegación','Abre el menú para cambiar entre los reportes habilitados en tu plan.']);
-      list.push(['sales','.filters','Período y filtros','Elige período y moneda. Los filtros secundarios acotan las cifras y sus documentos.','summary']);
+      list.push([allowed[0],'.filters','Período y filtros','Elige el período. Los filtros secundarios acotan las cifras y sus documentos.','summary']);
     }
     for(const mod of which==='general'?allowed:[which]){
       if(!allowed.includes(mod))continue;

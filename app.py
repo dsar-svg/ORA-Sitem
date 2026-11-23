@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import json
 import os
 from html import escape
@@ -9,6 +10,8 @@ from urllib.parse import urlsplit, parse_qs
 from erp_auth import configured_provider, Sessions, LoginDenied, AdditionalVerification, ProviderUnavailable
 from access import roster, identity, basic_scope
 from demo import Demo
+from odoo_sales import CARACAS, sales_report
+from datetime import date, datetime
 from model import SCHEMA, read_model, sync
 
 ROOT = Path(__file__).resolve().parent
@@ -16,7 +19,7 @@ DATABASE = Path(os.getenv("ORA_DATA_DIR", ROOT / "data")) / "andina.sqlite3"
 ASSETS = {"/": ("index.html","text/html"), "/style.css": ("style.css","text/css"),
           "/portal.js": ("portal.js","text/javascript"), "/metrics.js": ("metrics.js","text/javascript")}
 
-for module in ("inventory.js","theme.js","filters.js","customers.js","map.js","reports.js","exports.js","tour.js","restock.js"):
+for module in ("boot.js","inventory.js","theme.js","filters.js","customers.js","map.js","reports.js","exports.js","tour.js","restock.js"):
     ASSETS["/" + module] = (module, "text/javascript")
 BOUNDARY = "cartography/VEN-ADM1-9469f09.geojson"
 ASSETS["/" + BOUNDARY] = (BOUNDARY, "application/geo+json")
@@ -30,6 +33,11 @@ if PLAN not in PLANS:
     raise ValueError("ORA_PLAN debe ser basico, intermedio o avanzado")
 
 ERP = configured_provider(ROOT,PLAN)
+SALES_MONTH = os.getenv("ORA_SALES_MONTH", "")
+if SALES_MONTH:
+    date.fromisoformat(SALES_MONTH + "-01")
+    if not ERP or not (ERP.company_id or "").isdigit() or PLAN == "basico":
+        raise ValueError("Ventas Odoo requiere ODOO_COMPANY_ID y plan Intermedio o Avanzado")
 USERS = {} if ERP else roster(PLAN)
 SESSIONS = Sessions()
 PUBLIC_ORIGIN = os.getenv("ORA_PUBLIC_ORIGIN","").rstrip("/")
@@ -140,6 +148,44 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         if path == "/api/demo":
+            if SALES_MONTH:
+                options = parse_qs(urlsplit(self.path).query)
+                view = options.get("view",[None])[0]
+                latest = datetime.now(CARACAS).date().isoformat()[:7]
+                earliest = os.getenv("ORA_START_MONTH","2026-01")
+                month = options.get("month",[SALES_MONTH])[0]
+                try:
+                    date.fromisoformat(month+"-01")
+                    if len(month)!=7 or not earliest<=month<=latest:
+                        raise ValueError()
+                except ValueError:
+                    self.reply(400)
+                    return
+                if view is not None and view not in PLANS[PLAN]:
+                    self.reply(403)
+                    return
+                try:
+                    report = sales_report(ERP.host, account, month, view)
+                except LoginDenied:
+                    SESSIONS.account(self.headers.get("Cookie",""), logout=True)
+                    self.reply(401)
+                    return
+                except PermissionError:
+                    self.reply(403)
+                    return
+                except ProviderUnavailable:
+                    self.reply(502)
+                    return
+                report["plan"] = PLAN
+                if view:
+                    report.update(modules=PLANS[PLAN],firstMonth=earliest,lastMonth=latest)
+                body = json.dumps(report).encode()
+                # Inventory snapshots carry one row per product, warehouse and day; JSON compresses ~15x.
+                if "gzip" in self.headers.get("Accept-Encoding",""):
+                    self.reply(200, gzip.compress(body, 6), "application/json", **{"Content-Encoding":"gzip","Vary":"Accept-Encoding"})
+                else:
+                    self.reply(200, body, "application/json")
+                return
             modules = PLANS[PLAN]
             model = read_model(DATABASE, include_inventory="inventory" in modules)
             if ERP and any(c["source"]!="demo-v1" for c in model["company"]):
@@ -164,6 +210,20 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ASSETS:
             name, mime = ASSETS[path]
             content = (ROOT / "web" / name).read_bytes()
+            if path == "/":
+                # The plan is known here, so the sidebar paints with its final sections instead of after /api/demo.
+                for module in ("sales","ar","clients","inventory"):
+                    if module not in PLANS[PLAN]:
+                        content = content.replace(f'data-module="{module}"'.encode(), f'data-module="{module}" hidden'.encode())
+                # Identity and source are known before /api/demo, so the header and profile paint final values.
+                plan_name = {"basico":"Básico","intermedio":"Intermedio","avanzado":"Avanzado"}[PLAN]
+                fills = {'<span>Perfil de demo</span>': f'<span>{escape(user)}</span>' if user and user != "demo-local" else None,
+                         '<strong id="company">ORA</strong>': f'<strong id="company">{escape(account.company)}</strong>' if account else None,
+                         '<span class="badge"></span>': f'<span class="badge">{"Odoo" if SALES_MONTH else "Demo"} · {plan_name}</span>',
+                         '<body>': '<body data-live="1">' if SALES_MONTH else None}
+                for marker, value in fills.items():
+                    if value:
+                        content = content.replace(marker.encode(), value.encode())
         else:
             self.send_error(404)
             return
@@ -178,8 +238,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ORA · portal local de demostración")
     parser.add_argument("command", choices=["demo","serve"], default="serve", nargs="?")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--erp-container", action="store_true",
+                        help="Escuchar en todas las interfaces detrás del proxy HTTPS del piloto ERP")
     args = parser.parse_args()
-    if args.command == "demo" or not DATABASE.exists():
+    if args.erp_container and (not ERP or not PUBLIC_ORIGIN or not os.getenv("ORA_PLAN")):
+        parser.error("El contenedor requiere Odoo, ORA_PUBLIC_ORIGIN y ORA_PLAN configurados")
+    if SALES_MONTH and args.command == "serve":
+        pass  # Live reports read directly from Odoo under the user's session.
+    elif args.command == "demo" or not DATABASE.exists():
         sync(DATABASE,"andina",Demo())
         print("Datos sintéticos cargados.",flush=True)
     else:
@@ -187,8 +253,9 @@ if __name__ == "__main__":
         with sqlite3.connect(DATABASE) as db:
             db.executescript(SCHEMA)
     if args.command == "serve":
-        server = ThreadingHTTPServer(("127.0.0.1",args.port), Handler)
-        print(f"ORA disponible en http://127.0.0.1:{server.server_port}",flush=True)
+        host = "0.0.0.0" if args.erp_container else "127.0.0.1"
+        server = ThreadingHTTPServer((host,args.port), Handler)
+        print(f"ORA disponible en {PUBLIC_ORIGIN or f'http://{host}:{server.server_port}'}",flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

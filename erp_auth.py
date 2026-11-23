@@ -1,6 +1,6 @@
 """Password authentication through the ERP configured for this ORA installation."""
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http.client import HTTPSConnection, HTTPException
 from http.cookies import SimpleCookie, CookieError
 import json
@@ -28,6 +28,8 @@ class ProviderUnavailable(Exception):
 class Account:
     login: str
     company: str
+    company_id: int = 0
+    upstream_cookie: str = field(default="", repr=False)
 
 
 class OdooLogin:
@@ -51,6 +53,10 @@ class OdooLogin:
             connection.request("POST", "/web/session/authenticate", body.encode(),
                                {"Content-Type":"application/json","Accept":"application/json"})
             response = connection.getresponse()
+            cookie = SimpleCookie()
+            for key, value in response.getheaders():
+                if key.lower() == "set-cookie":
+                    cookie.load(value)
             if response.status != 200:
                 raise ProviderUnavailable()
             raw = response.read(512_001)
@@ -83,7 +89,8 @@ class OdooLogin:
         company = (companies.get("allowed_companies") or {}).get(cid)
         if not company:
             raise LoginDenied()
-        return Account(login,company["name"])
+        token = cookie.get("session_id")
+        return Account(login,company["name"],int(cid),token.coded_value if token else "")
 
 
 def configured_provider(root, plan):

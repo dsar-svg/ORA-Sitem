@@ -1,5 +1,5 @@
 import {customerMap} from './map.js';
-import {sales,balances,sum,groups} from './metrics.js';
+import {sales,balances,sum,groups,overdue} from './metrics.js';
 
 let activeTab='directory';
 
@@ -8,7 +8,7 @@ export function customers(data,docs,filter,ui){
   const locations=new Map(data.location.map(l=>[l.customer,l]));
   const monthly=sales(docs,filter.period);
   const ar=data.modules.includes('ar');
-  const pending=ar?balances(docs,filter.end):[];
+  const pending=ar?balances(ui.arDocs??docs,filter.end):[];
   const included=new Set(docs.filter(d=>d.issued<=filter.end).map(d=>d.customer));
   const all=data.customer.filter(c=>!filter.constrained||included.has(c.id)).map(c=>({
     ...c, ...locations.get(c.id), zone:locations.get(c.id)?.zone||'Sin ubicación',
@@ -32,7 +32,7 @@ export function customers(data,docs,filter,ui){
       (top?field('Venta neta del producto',money(top.value)):''),documents('Ver documentos de ventas',c.sales));
     if(ar){
       body+=section('Cartera al '+day(filter.end),field('Saldo pendiente',money(sum(c.ar)))+
-        field('Saldo vencido',money(sum(c.ar.filter(d=>d.days>0)))),documents('Ver documentos de cartera',c.ar,true));
+        field('Saldo vencido',money(sum(c.ar.filter(overdue)))),documents('Ver documentos de cartera',c.ar,true));
       const credit=data.credit_line.find(l=>l.customer===c.id&&l.currency===filter.curr);
       if(credit?.limit_cents>0){
         const whole=balances(companyDocs.filter(d=>d.customer===c.id&&d.currency===filter.curr),filter.end);

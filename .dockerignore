@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!access.py
+!app.py
+!demo.py
+!erp_auth.py
+!model.py
+!odoo_sales.py
+!odoo_inventory.py
+!stock_demo.py
+!web/
+!web/**

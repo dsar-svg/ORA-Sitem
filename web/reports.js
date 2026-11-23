@@ -1,4 +1,4 @@
-import {balances,sum} from './metrics.js';
+import {balances,sum,overdue} from './metrics.js';
 const iso=d=>d.toISOString().slice(0,10);
 export const previousDay=s=>iso(new Date(Date.parse(s)-86400000));
 export function monthRanges(month,today){
@@ -8,8 +8,8 @@ export function monthRanges(month,today){
   const current=today.startsWith(month);
   return {first,end:current?today:end,priorFirst:prior+'-01',priorEnd:current?prior+'-'+(today.slice(-2)<priorEnd.slice(-2)?today.slice(-2):priorEnd.slice(-2)):priorEnd};
 }
-export function gross(d){return d.sign*d.lines.reduce((n,l)=>n+l.net+l.tax,0)}
-export const docType=d=>d.sign<0?'Nota de crédito':'Factura';
+export function gross(d){return d.sign*(d.gross??d.lines.reduce((n,l)=>n+l.net+l.tax,0))}
+export const docType=d=>d.ledger?(d.sign<0?'Abono':'Cargo'):(d.sign<0?'Nota de crédito':'Factura');
 export function statement(docs,customer,from,end,history={}){
   const scoped=docs.filter(d=>d.customer===customer && d.issued<=end);
   const opening=sum(balances(scoped,previousDay(from))),open=balances(scoped,end);
@@ -30,12 +30,12 @@ export function statement(docs,customer,from,end,history={}){
   const missing=[];
   if(!history.opening||!history.start||from<history.start)missing.push('saldo inicial verificable');
   if(!history.applications||!history.through||end>history.through)missing.push('historial de aplicaciones hasta el corte');
-  return {opening,events,open,ending:running,overdue:sum(open.filter(d=>d.days>0)),missing,
-    summary:[['Saldo inicial',opening],['Facturas y cargos',by('Factura')],['Pagos aplicados',by('Pago aplicado')],['Notas de crédito',by('Nota de crédito')],['Liquidaciones de crédito',by('Liquidación de crédito')],['Saldo final',running],['Saldo vencido',sum(open.filter(d=>d.days>0))]]};
+  return {opening,events,open,ending:running,overdue:sum(open.filter(overdue)),missing,
+    summary:[['Saldo inicial',opening],['Facturas y cargos',by('Factura')+by('Cargo')],['Pagos aplicados',by('Pago aplicado')],['Créditos y abonos',by('Nota de crédito')+by('Abono')],['Liquidaciones de crédito',by('Liquidación de crédito')],['Saldo final',running],['Saldo vencido',sum(open.filter(overdue))]]};
 }
 export function statementTables(s){
   return [{name:'Movimientos',headers:['Fecha','Movimiento','Referencia','Documento','Cargo','Abono','Saldo acumulado'],amounts:[4,5,6],
     rows:s.events.map(e=>[e.date,e.label,e.reference,e.doc.number,Math.max(0,e.delta),Math.max(0,-e.delta),e.balance])},
     {name:'Abiertos al corte',headers:['Documento','Emisión','Vencimiento','Estado al corte','Saldo'],amounts:[4],
-    rows:s.open.map(d=>[d.number,d.issued,d.due,d.days>0?'Vencido':'Por vencer',d.value])}];
+    rows:s.open.map(d=>[d.number,d.issued,d.due,d.payment?'Pago sin aplicar':d.days>0?'Vencido':'Por vencer',d.value])}];
 }

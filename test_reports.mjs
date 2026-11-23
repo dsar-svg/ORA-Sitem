@@ -14,4 +14,7 @@ assert.equal(s.events.length,2);assert.equal(s.missing.length,0);
 assert.equal(s.open.reduce((n,r)=>n+r.value,0),s.ending);
 assert.equal(statement([doc,nc],'a','2026-10-01','2026-10-31').missing.length,2);
 assert.ok(statement([doc,nc],'a','2026-11-01','2026-11-30',history).missing.length);
+const pay={...nc,id:'3',number:'PAY-3',payment:true,issued:'2026-10-02',due:'2026-10-02',lines:[{net:500,tax:0}]};
+const withPay=statement([doc,nc,pay],'a','2026-10-01','2026-10-31',history);
+assert.deepEqual([withPay.ending,withPay.overdue],[5440,5940]); // unapplied payment lowers balance, not overdue
 console.log('OK: períodos equivalentes, parciales, créditos, apertura y cobertura.');

@@ -19,6 +19,34 @@ function save(blob,name){
   setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
 const argb=color=>'FF'+color.slice(1).toUpperCase();
+/* Draws a report chart (horizontal grouped bars) into a PNG so both formats embed the same picture. */
+function chartImage(c,currency,brand){
+  const W=1400,label=330,valueW=230,barH=22,gap=18,head=c.series.length>1?92:62;
+  const H=head+c.labels.length*(c.series.length*barH+gap)+20;
+  const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d'),colors=[brand.accent,brand.secondary,'#8a8a8a'];
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#2d262b';ctx.font='600 28px Helvetica,Arial,sans-serif';ctx.fillText(c.title,20,40);
+  ctx.font='20px Helvetica,Arial,sans-serif';
+  if(c.series.length>1)c.series.forEach((s,i)=>{const x=20+i*260;ctx.fillStyle=colors[i];ctx.fillRect(x,58,18,18);ctx.fillStyle='#2d262b';ctx.fillText(s.name,x+26,74)});
+  const all=c.series.flatMap(s=>s.values),low=Math.min(0,...all),high=Math.max(0,...all),span=(high-low)||1;
+  const x0=label,x1=W-valueW,scale=v=>x0+(v-low)/span*(x1-x0);
+  const text=v=>currency?moneyText(v,currency):String(v);
+  c.labels.forEach((name,i)=>{
+    const y=head+i*(c.series.length*barH+gap);
+    ctx.fillStyle='#2d262b';ctx.textAlign='right';
+    let shown=String(name);while(ctx.measureText(shown).width>label-30&&shown.length>4)shown=shown.slice(0,-2);
+    ctx.fillText(shown===String(name)?shown:shown+'…',label-14,y+c.series.length*barH/2+7);
+    ctx.textAlign='left';
+    c.series.forEach((s,j)=>{
+      const v=s.values[i]??0,a=scale(Math.min(0,v)),b=scale(Math.max(0,v)),top=y+j*barH;
+      ctx.fillStyle=colors[j];ctx.fillRect(a,top+2,Math.max(2,b-a),barH-4);
+      ctx.fillStyle='#5b5359';ctx.fillText(text(v),Math.max(b,scale(0))+8,top+barH-5);
+    });
+  });
+  ctx.strokeStyle='#bbb';ctx.beginPath();ctx.moveTo(scale(0),head-6);ctx.lineTo(scale(0),H-14);ctx.stroke();
+  return {data:canvas.toDataURL('image/png'),width:W,height:H};
+}
 function bookStyle(row,brand){
   row.eachCell(cell=>{cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:argb(brand.accent)}};cell.font={bold:true,color:{argb:argb(brand.foreground)}}});
 }
@@ -36,6 +64,14 @@ async function excel(r,name,brand){
   
   meta(r).forEach(pair=>{sheet.addRow(pair).getCell(2).alignment={wrapText:true}});
   for(const [label,value] of r.summary)sheet.addRow([label,r.currency?value/100:value]).getCell(2).numFmt=r.currency?format:'0';
+  if(r.charts?.length){
+    const ws=book.addWorksheet('Gráficas');let row=0;
+    for(const c of r.charts){
+      const img=chartImage(c,r.currency,brand),width=900,height=Math.round(900*img.height/img.width);
+      ws.addImage(book.addImage({base64:img.data,extension:'png'}),{tl:{col:0,row},ext:{width,height}});
+      row+=Math.ceil(height/20)+2;
+    }
+  }
   for(const t of r.tables){
     const ws=book.addWorksheet(t.name);ws.views=[{state:'frozen',ySplit:1}];
     ws.columns=t.headers.map((h,i)=>({width:Math.min(48,Math.max(15,h.length+3,...t.rows.slice(0,120).map(row=>String(row[i]).length+2)))}));
@@ -73,6 +109,14 @@ async function pdf(r,name,brand){
     breakdown=breakdown.filter(([label])=>!featured.has(label));
   }
   doc.autoTable({...options,startY:summaryY,head:[[r.headlineBalances?'Desglose del saldo':'Resumen',r.currency?'Importe':'Cantidad']],body:breakdown.map(([k,v])=>[k,r.currency?moneyText(v,r.currency):String(v)]),columnStyles:{1:{halign:'right'}}});
+  let chartY=doc.lastAutoTable.finalY+9;
+  for(const c of r.charts??[]){
+    const img=chartImage(c,r.currency,brand),w=pageW-28,h=Math.min(160,w*img.height/img.width),fit=h*img.width/img.height;
+    if(chartY+h>192){doc.addPage();chartY=32}
+    doc.addImage(img.data,'PNG',14,chartY,Math.min(w,fit),h);
+    chartY+=h+8;
+  }
+  if(r.charts?.length){doc.addPage();doc.lastAutoTable.finalY=23}
   for(const t of r.tables){
     let y=doc.lastAutoTable.finalY+9;
     if(y>168){doc.addPage();y=32}

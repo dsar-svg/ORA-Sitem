@@ -74,8 +74,41 @@ class LoginTests(unittest.TestCase):
         token=cookie.split(";")[0]
         report=json.loads(self.request("/api/demo",cookie=token)[2])
         self.assertEqual((report["user"],report["erpCompany"]),(self.email,"Empresa de prueba"))
+        page=self.request("/",cookie=token)[2].decode()
+        self.assertIn("<span>"+self.email+"</span>",page)
+        self.assertIn('<strong id="company">Empresa de prueba</strong>',page)
+        self.assertNotIn("Perfil de demo",page)
         self.assertEqual(self.request("/logout",{},token)[0],303)
         self.assertEqual(self.request("/api/demo",cookie=token)[0],401)
+
+    @patch("app.SALES_MONTH", "2026-10")
+    @patch("odoo_sales.HTTPSConnection")
+    def test_live_company_sales(self, transport):
+        app.ERP.company_id = "9"
+        self.info["user_companies"]["allowed_companies"]["9"] = {"name":"Company B"}
+        self.result(self.info)
+        self.response.getheaders.return_value = [("Set-Cookie","session_id=upstream; HttpOnly")]
+        cookie = self.login()[1]["Set-Cookie"].split(";")[0]
+        row = dict(id=4, company_id=[9,"Company B"], name="NC1", invoice_date="2026-10-10",
+                   invoice_date_due=False, move_type="out_refund", partner_id=[3,"Customer"],
+                   currency_id=[2,"USD"], amount_untaxed=1.11, amount_total=1.29)
+        connection = transport.return_value
+        response = connection.getresponse.return_value
+        response.status = 200
+        response.read.return_value = json.dumps({"result":[row]}).encode()
+        status, _, body = self.request("/api/demo",cookie=cookie)
+        self.assertEqual(status,200)
+        data = json.loads(body)
+        self.assertEqual(data["company"],[dict(id="9",name="Company B",source="odoo")])
+        self.assertEqual(data["modules"],["sales"])
+        self.assertEqual((data["document"][0]["kind"],data["document"][0]["net"]),("credit",111))
+        args = connection.request.call_args.args
+        kwargs = json.loads(args[2])["params"]["kwargs"]
+        self.assertIn(["company_id","=",9],kwargs["domain"])
+        self.assertEqual(kwargs["context"]["allowed_company_ids"],[9])
+        self.assertEqual(args[3]["Cookie"],"session_id=upstream")
+        response.read.return_value = json.dumps({"result":[{**row,"company_id":[2,"A"]}]}).encode()
+        self.assertEqual(self.request("/api/demo",cookie=cookie)[0],502)
 
     def test_pending_factor_wrong_database_and_external_account(self):
         for change in ({"uid":None},{"db":"other"},{"is_internal_user":False},{"username":"other@example.test"}):
