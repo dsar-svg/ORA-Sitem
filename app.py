@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import json
 import os
 from html import escape
@@ -178,7 +179,12 @@ class Handler(BaseHTTPRequestHandler):
                 report["plan"] = PLAN
                 if view:
                     report.update(modules=PLANS[PLAN],firstMonth=earliest,lastMonth=latest)
-                self.reply(200, json.dumps(report).encode(), "application/json")
+                body = json.dumps(report).encode()
+                # Inventory snapshots carry one row per product, warehouse and day; JSON compresses ~15x.
+                if "gzip" in self.headers.get("Accept-Encoding",""):
+                    self.reply(200, gzip.compress(body, 6), "application/json", **{"Content-Encoding":"gzip","Vary":"Accept-Encoding"})
+                else:
+                    self.reply(200, body, "application/json")
                 return
             modules = PLANS[PLAN]
             model = read_model(DATABASE, include_inventory="inventory" in modules)

@@ -41,14 +41,14 @@ class LiveReportsTests(TestCase):
     def test_warehouse_close_and_return_in_caracas(self):
         reader = Mock()
         reader.scope.return_value = [["company_id","=",9]]
-        reader.call.side_effect = [[],[dict(product_id=[1,"P"],location_dest_id=[8,"WH"],quantity_product_uom=10)]]
+        reader.call.side_effect = [[],[dict(product_id=[1,"P"],location_dest_id=[8,"WH"],quantity_product_uom=10)],
+            [dict(product_id=[1,"P"],location_id=[8,"WH"],location_dest_id=[4,"Cliente"],quantity_product_uom=6,
+                  __count=2,__range={"date:day":{"from":"2026-01-12 04:00:00"}}),
+             dict(product_id=[1,"P"],location_id=[4,"Cliente"],location_dest_id=[8,"WH"],quantity_product_uom=1,
+                  __count=1,__range={"date:day":{"from":"2026-01-31 04:00:00"}})]]
         locations = [dict(id=8,warehouse_id=[2,"Almacén"],usage="internal",complete_name="WH"),
                      dict(id=4,warehouse_id=False,usage="customer",complete_name="Cliente")]
-        moves = [dict(id=1,date="2026-01-12 04:30:00",product_id=[1,"P"],location_id=[8,"WH"],
-            location_dest_id=[4,"Cliente"],quantity_product_uom=6,reference="SAL"),
-            dict(id=2,date="2026-02-01 02:00:00",product_id=[1,"P"],location_id=[4,"Cliente"],
-            location_dest_id=[8,"WH"],quantity_product_uom=1,reference="DEV")]
-        reader.rows.side_effect=[locations,moves]
+        reader.rows.side_effect=[locations]
         reader.related.return_value=[dict(id=1,default_code="ABC",categ_id=[1,"General"],uom_id=[1,"Unidad"])]
         data={k:[] for k in ("stock_cut","stock_move","stock_day","stock_policy","inbound")}
         inventory(reader,data,date(2026,1,1),date(2026,1,31),date(2026,11,23))

@@ -342,7 +342,8 @@ try{
   $('sync').classList.add('loading');
   const query=new URLSearchParams({view:requestedView});
   if(requested.has('month'))query.set('month',requested.get('month'));
-  const response=await fetch('/api/demo?'+query);
+  // A stalled ERP read must end in a visible error, not an endless loader.
+  const response=await fetch('/api/demo?'+query,{signal:AbortSignal.timeout(180000)}).catch(e=>{throw Error(e.name==='TimeoutError'?'Odoo tardó demasiado en responder. Intenta de nuevo o elige otro mes.':'No se pudo conectar con el servidor.')});
   if(response.status===401 && !response.headers.has('WWW-Authenticate')){location.replace('/login');throw Error('Sesión expirada')}
   if(!response.ok) throw Error(response.status===403?'Tu cuenta carece de acceso a la lectura solicitada.':'No se pudieron consultar los datos. Revisa la conexión y vuelve a cargar.');
   data=await response.json();

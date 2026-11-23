@@ -36,8 +36,10 @@ def inventory(reader,data,first,end,today):
                 names[pid] = name
                 balances[pid,loc[1]] += sign*g["quantity_product_uom"]
     moves = defaultdict(list)
-    domain = scope[1:]+[["date",">=",midnight_utc(start)],["date","<",midnight_utc(end+timedelta(days=1))]]
-    for r in reader.rows("stock.move.line","date reference product_id location_id location_dest_id quantity_product_uom",domain):
+    domain = scope+[["date",">=",midnight_utc(start)],["date","<",midnight_utc(end+timedelta(days=1))]]
+    # One grouped query per product, route and Caracas day: line-by-line paging took hundreds of calls.
+    for r in reader.call("stock.move.line","read_group",dict(domain=domain,fields=["quantity_product_uom:sum"],
+                         groupby=["product_id","location_id","location_dest_id","date:day"],lazy=False)):
         src = locations.get(r["location_id"][0])
         dst = locations.get(r["location_dest_id"][0])
         if not src or not dst:
@@ -46,13 +48,17 @@ def inventory(reader,data,first,end,today):
             continue
         pid,name = r["product_id"]
         names[pid] = name
-        timestamp = (datetime.fromisoformat(r["date"])-timedelta(hours=4)).isoformat()
+        begin = r["__range"]["date:day"]["from"]
+        # Odoo reports the day start in UTC (04:00 for Caracas); accept a local midnight as well.
+        day = begin[:10] if begin[11:13]=="00" else (datetime.fromisoformat(begin)-timedelta(hours=4)).date().isoformat()
+        timestamp = day+"T12:00:00"
+        r["reference"] = f'{r["__count"]} movimiento'+("s" if r["__count"]!=1 else "")
         for loc,other,sign in ((src,dst,-1),(dst,src,1)):
             if loc[0]!="internal":
                 continue
             kind = {"internal":"transfer","customer":"sale" if sign<0 else "return",
                     "supplier":"receipt" if sign>0 else "adjustment"}.get(other[0],"adjustment")
-            moves[timestamp[:7],pid,loc[1]].append((timestamp,sign*r["quantity_product_uom"],kind,r["reference"] or str(r["id"])))
+            moves[timestamp[:7],pid,loc[1]].append((timestamp,sign*r["quantity_product_uom"],kind,r["reference"]))
             balances.setdefault((pid,loc[1]),Decimal(0))
     reserves, minimum, incoming = defaultdict(Decimal),defaultdict(Decimal),defaultdict(list)
     if end==today:
