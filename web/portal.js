@@ -6,7 +6,7 @@ import {enhanceFilters,setupNavigation} from './filters.js';
 import {customers} from './customers.js';
 import {renderInventory} from './inventory.js';
 import {initAppearance} from './theme.js';
-import {prepare,sales,balances,sum,groups} from './metrics.js';
+import {prepare,sales,balances,sum,groups,overdue} from './metrics.js';
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -30,6 +30,24 @@ const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
 const day = s => s.split('-').reverse().join('/');
 const colors = ['var(--plum)','var(--muted)','var(--peach)'];
 let data, opener, docs, moduleName='sales', actions=[];
+let ledgerDocs;
+const requested = new URLSearchParams(location.search);
+const requestedView = requested.get('view') || 'sales';
+const viewTitles={sales:'Resumen de ventas',ar:'Cuentas por cobrar',clients:'Clientes',inventory:'Inventario'};
+const loaderHTML='<div class="loader" role="status"><span></span>Cargando reporte…</div>';
+function markLoading(view){
+  document.querySelectorAll('[data-module]').forEach(b=>{const active=b.dataset.module===view;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active)});
+  $('title').textContent=viewTitles[view]??viewTitles.sales;$('subtitle').textContent='';
+  $('dashboard').innerHTML=loaderHTML;$('reportBar').hidden=true;
+  $('sync').classList.add('loading');$('sync').textContent='Cargando datos…';
+}
+function openLiveView(view,month){
+  markLoading(view);
+  const target = new URL(location.href);
+  target.searchParams.set('view',view);
+  target.searchParams.set('month',month);
+  location.assign(target);
+}
 let salesTab='summary', arTab='summary', inventoryTab='summary', renderRestock, viewReport, detailReport;
 const businessToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Caracas',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const rangeText=(a,b)=>day(a)+' – '+day(b);
@@ -37,7 +55,7 @@ const selected=id=>$(id).selectedOptions[0]?.text??'';
 function context(title,range,filters){
   return {title,range,currency:$('currency').value,company:data.company[0].name,
     origin:data.company[0].source==='demo-v1'?'Datos sintéticos de demostración':'ERP',
-    filters:filters||[data.branch||selected('branch'),...['seller','product','zone'].filter(id=>!$(id).parentElement.hidden).map(selected)].join(' · ')};
+    filters:(filters||[data.branch||selected('branch'),...['seller','product','zone'].filter(id=>!$(id).parentElement.hidden).map(selected)].join(' · '))+(data.excludedGroup?.length?' · Sin empresas del grupo':'')};
 }
 function documentReport(title,rows,range,filters){
   return {...context(title,range,filters),summary:[['Importe en el reporte',sum(rows)]],
@@ -51,7 +69,7 @@ function reportTabs(salesMode,statementMode){
   const pair=inv?[['summary','Existencias'],['restock','Reposición']]:salesMode?[['summary','Resumen'],['docs','Documentos']]:[['summary','Resumen'],['statement','Estados de cuenta']];
   const active=inv?inventoryTab:salesMode?salesTab:arTab;
   $('reportBar').firstElementChild.innerHTML=pair.map(([id,name])=>'<button data-view="'+id+'" aria-pressed="'+(id===active)+'">'+name+'</button>').join('');
-  $('viewExport').innerHTML=salesMode||statementMode||(inv&&inventoryTab==='restock')?exportMenu('view'):'';
+  $('viewExport').innerHTML=salesMode||moduleName==='ar'||(inv&&inventoryTab==='restock')?exportMenu('view'):'';
   $('docFilters').hidden=!salesMode||active!=='docs';
 }
 function reportTable(headers,rows){
@@ -89,10 +107,13 @@ function kpi(title,value,sub,symbol,rows,primary=false){
 }
 function panel(title,sub,body){return '<article class="panel"><h2>'+title+'</h2><p class="hint">'+esc(sub)+'</p>'+body+'</article>'}
 function dot(color){return '<i class="dot" style="background:'+color+'"></i>'}
-function lastDay(){const d=monthDate($('period').value);d.setUTCMonth(d.getUTCMonth()+1,0);return d.toISOString().slice(0,10)}
+function lastDay(){if(data.cutoff)return data.cutoff;const d=monthDate($('period').value);d.setUTCMonth(d.getUTCMonth()+1,0);return d.toISOString().slice(0,10)}
+const bounds=[5,10,15,20,25,31];
+const slices=rows=>bounds.map((end,i)=>rows.filter(r=>+r.issued.slice(-2)<=end && +r.issued.slice(-2)>(bounds[i-1]||0)));
+const sliceLabels=bounds.map((v,i)=>(1+(bounds[i-1]||0))+'–'+(i===5?'fin':v));
+const top=(entries,n=15)=>[...entries].sort((a,b)=>Math.abs(b.value)-Math.abs(a.value)).slice(0,n);
+const barChart=(title,entries)=>({title,labels:entries.map(e=>e.name),series:[{name:title,values:entries.map(e=>e.value)}]});
 function chart(current,prior,period,prev){
-  const bounds=[5,10,15,20,25,31];
-  const slices=rows=>bounds.map((end,i)=>rows.filter(r=>+r.issued.slice(-2)<=end && +r.issued.slice(-2)>(bounds[i-1]||0)));
   const series=[slices(current),slices(prior)];
   const vals=series.flatMap(s=>s.map(sum));
   const top=Math.ceil(Math.max(1,...vals)/10000)*10000, low=Math.min(0,...vals);
@@ -138,24 +159,25 @@ function breakdown(title,label,entries,total){
   const ar=moduleName==='ar';
   return panel(title,'Selecciona una fila para consultar sus documentos.','<div class="table-wrap"><table><thead><tr><th>'+label+'</th><th class="num">Documentos</th><th class="num">Participación</th><th class="num">Importe</th>'+(ar?'<th class="num">Vencido</th>':'')+'<th>Detalle</th></tr></thead><tbody>'+entries.map(g=>{
     const share=total?g.value/total*100:0;
-    return '<tr><td>'+esc(g.name)+'</td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(r=>r.days>0)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos ↗</button></td></tr>';
+    return '<tr><td>'+esc(g.name)+'</td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(overdue)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos ↗</button></td></tr>';
   }).join('')+'</tbody></table></div>'+(entries.length?'':'<p class="empty">Sin movimientos para estos filtros.</p>'));
 }
 function render(){
   actions=[];
   const period=$('period').value, branch=$('branch').value, curr=$('currency').value;
   const clients=moduleName==='clients',hasSeller=data.assignment.length>0;
-  const seller=(moduleName==='sales'||clients)&&hasSeller?$('seller').value:'';
-  const filtered=docs.filter(d=>d.currency===curr && (!branch || d.branch===branch) && (!seller||d.seller===seller));
+  const sellerEnabled=moduleName==='sales'||(clients&&!data.firstMonth);
+  const seller=sellerEnabled&&hasSeller?$('seller').value:'';
+  const filtered=(moduleName==='ar'&&ledgerDocs?ledgerDocs:docs).filter(d=>d.currency===curr && (!branch || d.branch===branch) && (!seller||d.seller===seller));
   const isSales=moduleName==='sales';
   const stock=moduleName==='inventory';
   for(const id of ['branch','currency']) $(id).parentElement.hidden=stock;
   for(const id of ['warehouse','category','stockProduct']) $(id).parentElement.hidden=!stock;
   $('zone').parentElement.hidden=!clients||!data.location.some(l=>l.zone);
-  $('seller').parentElement.hidden=!hasSeller||!(clients||isSales);
+  $('seller').parentElement.hidden=!hasSeller||!sellerEnabled;
   const statementMode=moduleName==='ar' && arTab==='statement';
   $('statementCustomer').parentElement.hidden=!statementMode;
-  $('branch').parentElement.hidden=stock||!!data.branch;
+  $('branch').parentElement.hidden=stock||!!data.branch||!!data.reportMonth;
   $('prodLabel').hidden=!isSales||!data.product.length;
   reportTabs(isSales,statementMode);
   viewReport=null;
@@ -166,9 +188,10 @@ function render(){
   $('title').textContent=clients?'Clientes':stock?'Inventario':isSales?'Resumen de ventas':'Cuentas por cobrar';
   document.title=$('title').textContent+' · ORA';
   $('subtitle').textContent=clients?'Ventas de '+monthName(period)+(data.modules.includes('ar')?' · Cartera al '+day(lastDay()):''):stock?'Existencias y rotación al '+day(lastDay())+'.':isSales?'Facturación, evolución y composición de las ventas del período.':'Cartera de clientes y vencimientos al '+day(statementMode?monthRanges(period,businessToday()).end:lastDay())+'.';
+  if(data.excludedGroup?.length&&!stock)$('subtitle').textContent+=' Excluye ventas y cartera de empresas del grupo: '+data.excludedGroup.join(', ')+'.';
   document.querySelectorAll('[data-module]').forEach(b=>{const active=b.dataset.module===moduleName;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active)});
   if(clients){
-    $('dashboard').innerHTML=customers(data,filtered,{period,end:lastDay(),zone:$('zone').value,branch,seller,curr,constrained:!!(branch||seller)},{money,esc,day,action,openRows,show:showDetail,companyDocs:docs,refresh:render});
+    $('dashboard').innerHTML=customers(data,filtered,{period,end:lastDay(),zone:$('zone').value,branch,seller,curr,constrained:!!(branch||seller),live:!!data.reportMonth},{money,esc,day,action,openRows,show:showDetail,companyDocs:ledgerDocs??docs,arDocs:ledgerDocs?.filter(d=>d.currency===curr),refresh:render});
     enableMapPan(document.querySelector('.venezuela svg'),render);
     return;
   }
@@ -223,7 +246,7 @@ function render(){
     cards=kpi('Facturas emitidas',String(invoices.length),money(sum(invoices))+' sin impuestos','invoice',invoices)+
       kpi('Notas de crédito',money(sum(credits)),credits.length+(credits.length===1?' documento de ajuste':' documentos de ajuste'),'credit',credits);
     evolution=panel('Evolución de ventas',range+' frente a '+rangeText(ranges.priorFirst,ranges.priorEnd)+' · '+curr+(coverage?' · '+coverage:''),chart(current,prior,period,prev));
-    panels=panel('Ventas por sucursal','Participación en la facturación neta',distribution(current))+
+    panels=(data.reportMonth?'':panel('Ventas por sucursal','Participación en la facturación neta',distribution(current)))+
       (hasSeller?panel('Ventas por vendedor','Facturación neta · participación · facturas emitidas',sellerRanking(current)):'');
     const items=current.flatMap(r=>r.lines.map(l=>({...r,lines:[l],name:l.name,productId:l.product,value:l.net*r.sign})));
     const products=groups(items,'productId').map(g=>{
@@ -231,19 +254,30 @@ function render(){
       return {...g,name:g.docs[0].name,docs:documents};
     });
     table=data.product.length?breakdown('Desglose por producto','Producto',products,net):'';
+    viewReport.charts=[{title:'Evolución de ventas por tramo del mes',labels:sliceLabels.map(l=>'Días '+l),
+      series:[{name:cap(monthName(period)),values:slices(current).map(sum)},{name:cap(monthName(prev)),values:slices(prior).map(sum)}]},
+      ...(data.reportMonth?[]:[barChart('Ventas por sucursal',groups(current,'branch'))]),
+      ...(hasSeller?[barChart('Ventas por vendedor',groups(current,'seller').map(g=>({...g,name:data.seller.find(x=>x.id===g.name)?.name??'Sin asignar'})))]:[]),
+      ...(products.length?[barChart('Ventas por producto (principales 15)',top(products))]:[])];
   }else{
     if(statementMode){
       renderStatement(filtered,period);
       return;
     }
-    const rows=balances(filtered,lastDay()),late=rows.filter(d=>d.days>0),upcoming=rows.filter(d=>d.days<=0);
-    cards=kpi('Saldo pendiente',money(sum(rows)),rows.length+' documentos abiertos','wallet',rows,true)+
-      kpi('Saldo vencido',money(sum(late)),late.length+' documentos vencidos','clock',late)+
-      kpi('Por vencer',money(sum(upcoming)),upcoming.length+' documentos al día','calendar',upcoming);
+    const rows=balances(filtered,lastDay()),late=rows.filter(overdue),upcoming=rows.filter(d=>d.days<=0&&!d.payment),unapplied=rows.filter(d=>d.payment);
+    const unit=data.firstMonth?' partidas':' documentos';
+    cards=kpi('Saldo pendiente',money(sum(rows)),rows.length+unit,'wallet',rows,true)+
+      kpi('Saldo vencido',money(sum(late)),late.length+unit,'clock',late)+
+      kpi('Por vencer',money(sum(upcoming)),upcoming.length+unit,'calendar',upcoming)+
+      (unapplied.length?kpi('Pagos sin aplicar',money(sum(unapplied)),unapplied.length+' pagos por conciliar','credit',unapplied):'');
     const buckets=['Por vencer','1–30 días','31–60 días','61–90 días','Más de 90 días'];
     const bands=buckets.map(k=>rows.filter(d=>d.bucket===k)),max=Math.max(1,...bands.map(x=>Math.abs(sum(x))));
     panels=panel('Antigüedad de saldos','Saldo por vencimiento al '+day(lastDay())+' · Selecciona un tramo para revisar sus facturas.',bands.map((b,i)=>horizontal(buckets[i],money(sum(b)),sum(b),max,drill(buckets[i],b),i===4)).join(''));
-    table=breakdown('Cartera por cliente','Cliente',groups(rows,'customer').map(g=>({...g,name:g.docs[0].client})),sum(rows));
+    const byClient=groups(rows,'customer').map(g=>({...g,name:g.docs[0].client}));
+    table=breakdown('Cartera por cliente','Cliente',byClient,sum(rows));
+    viewReport=documentReport('Cuentas por cobrar',rows,'Corte '+day(lastDay()));
+    viewReport.summary.push(['Saldo vencido',sum(late)],['Por vencer',sum(upcoming)],...(unapplied.length?[['Pagos sin aplicar',sum(unapplied)]]:[]));
+    viewReport.charts=[barChart('Antigüedad de saldos',buckets.map((name,i)=>({name,value:sum(bands[i])}))),barChart('Cartera por cliente (principales 15)',top(byClient))];
   }
   if(isSales){
     $('dashboard').innerHTML='<div class="sales-overview"><div class="sales-summary">'+hero+'<p class="net-rule">Facturas contabilizadas menos notas de crédito, sin impuestos.</p><div class="support">'+cards+'</div></div><div class="trend">'+evolution+'</div></div><div class="ranking-pair">'+panels+'</div>'+table;
@@ -291,14 +325,33 @@ for(const event of ['focusin','pointerover']){
   });
 }
 setupNavigation();
+// Shrink oversized figures until they fit their card; covers every renderer and viewport change.
+function fitNumbers(){
+  document.querySelectorAll('.kpi strong,.statement-focus strong').forEach(el=>{
+    el.style.fontSize='';
+    let size=parseFloat(getComputedStyle(el).fontSize);
+    while(el.scrollWidth>el.clientWidth+1&&size>12){size-=1;el.style.fontSize=size+'px'}
+  });
+}
+new MutationObserver(()=>requestAnimationFrame(fitNumbers)).observe($('dashboard'),{childList:true});
+window.addEventListener('resize',()=>requestAnimationFrame(fitNumbers));
+if(viewTitles[requestedView])markLoading(requestedView);
 
 $('close').onclick=()=>$('detail').close();
 try{
   $('sync').classList.add('loading');
-  const response=await fetch('/api/demo');
+  const query=new URLSearchParams({view:requestedView});
+  if(requested.has('month'))query.set('month',requested.get('month'));
+  const response=await fetch('/api/demo?'+query);
   if(response.status===401 && !response.headers.has('WWW-Authenticate')){location.replace('/login');throw Error('Sesión expirada')}
-  if(!response.ok) throw Error();
-  data=await response.json(); docs=prepare({...data,settlement:data.settlement??[]});
+  if(!response.ok) throw Error(response.status===403?'Tu cuenta carece de acceso a la lectura solicitada.':'No se pudieron consultar los datos. Revisa la conexión y vuelve a cargar.');
+  data=await response.json();
+  docs=prepare({...data,settlement:data.arDocument?[]:data.settlement??[]});
+  if(data.firstMonth)moduleName=requestedView;
+  if(data.arDocument){
+    ledgerDocs=prepare({...data,document:data.arDocument,line:[]});
+    ledgerDocs.forEach(d=>d.fullGross=gross(d));
+  }
   if(data.modules.includes('inventory'))({renderRestock}=await import('./restock.js'));
   $('logout').hidden=!data.erpCompany;
   if(data.erpCompany)window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
@@ -311,15 +364,17 @@ try{
   options('zone',[['','Todas las zonas'],...zones.map(z=>[z,z]),['Sin ubicación','Sin ubicación']]);
   document.querySelectorAll('[data-module]').forEach(b=>b.hidden=!data.modules.includes(b.dataset.module));
   const branches=[...new Set(docs.map(d=>d.branch))];
-  if(!data.branch && branches.length===1)data.branch=branches[0];
+  if(!data.reportMonth && !data.branch && branches.length===1)data.branch=branches[0];
   $('company').textContent=data.company[0].name+(data.branch?' · '+data.branch:'');
-  document.querySelector('.badge').textContent='Demo · '+({basico:'Básico',intermedio:'Intermedio',avanzado:'Avanzado'})[data.plan];
+  document.querySelector('.badge').textContent=(data.reportMonth?'Odoo':'Demo')+' · '+({basico:'Básico',intermedio:'Intermedio',avanzado:'Avanzado'})[data.plan];
+  document.querySelector('footer span').textContent=data.reportMonth?'Fuente: Odoo':'Datos sintéticos de demostración';
   document.querySelector('#accountMenu summary span').textContent=data.user==='demo-local'?'Perfil de demo':data.user;
   options('statementCustomer',[...data.customer].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c=>[c.id,c.name]));
   $('sync').textContent='Última sincronización · '+new Date(data.synced).toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'});
   options('period',[...new Set(docs.map(d=>d.issued.slice(0,7)))].sort().reverse().map(m=>[m,cap(monthName(m))]));
   options('branch',[['','Todas las sucursales'],...[...new Set(docs.map(d=>d.branch))].sort().map(b=>[b,b])]);
-  options('currency',[...new Set(docs.map(d=>d.currency))].sort().reverse().map(c=>[c,c]));
+  options('currency',[...new Set([...docs,...(ledgerDocs??[])].map(d=>d.currency))].sort().reverse().map(c=>[c,c]));
+  if([...$('currency').options].some(o=>o.value===data.company[0].currency))$('currency').value=data.company[0].currency;
   options('product',[['','Todos los productos'],...data.product.map(p=>[p.id,p.name])]);
   if(data.modules.includes('inventory')){
     options('warehouse',[['','Todos los almacenes'],...data.warehouse.map(w=>[w.id,w.name])]);
@@ -329,24 +384,37 @@ try{
     options('period',periods.map(m=>[m,cap(monthName(m))]));
   }
   const thisMonth=businessToday().slice(0,7);
-  if(!Array.from($('period').options).some(o=>o.value===thisMonth)){
+  if(data.firstMonth){
+    const periods=[];
+    const d=monthDate(data.lastMonth);
+    while(d.toISOString().slice(0,7)>=data.firstMonth){
+      const m=d.toISOString().slice(0,7);periods.push([m,cap(monthName(m))]);d.setUTCMonth(d.getUTCMonth()-1);
+    }
+    options('period',periods);$('period').value=data.reportMonth;
+  }else if(data.reportMonth){
+    options('period',[[data.reportMonth,cap(monthName(data.reportMonth))]]);
+  }else if(!Array.from($('period').options).some(o=>o.value===thisMonth)){
     $('period').add(new Option(cap(monthName(thisMonth)),thisMonth));
   }
   if(data.branch)$('branch').value=data.branch;
   document.querySelectorAll('.filters select').forEach(s=>s.onchange=render);
+  if(data.firstMonth)$('period').onchange=()=>openLiveView(moduleName,$('period').value);
   document.querySelectorAll('[data-module]').forEach(b=>b.onclick=()=>{if(!data.modules.includes(b.dataset.module))return;if(b.dataset.module==='clients'&&moduleName!=='clients')resetMap();moduleName=b.dataset.module;render()});
+  if(data.firstMonth)document.querySelectorAll('[data-module]').forEach(b=>b.onclick=()=>openLiveView(b.dataset.module,data.reportMonth));
   enhanceFilters();
   for(const id of ['leadDays','safetyUnits','stockPriority'])$(id).oninput=render;
   render();
   $('demandMonths').onchange=render;
-  initTour({user:data.company[0].id+'.'+data.user+'.'+data.plan,modules:data.modules,
+  initTour({user:data.company[0].id+'.'+data.user+'.'+data.plan,modules:data.firstMonth?[moduleName]:data.modules,
     state:()=>({mod:moduleName,tab:moduleName==='sales'?salesTab:moduleName==='ar'?arTab:inventoryTab,
       salesTab,arTab,inventoryTab}),
     restore:s=>{moduleName=s.mod;salesTab=s.salesTab;arTab=s.arTab;inventoryTab=s.inventoryTab;render()},
     navigate:(mod,tab)=>{if(!data.modules.includes(mod))return;moduleName=mod;
       if(tab){if(mod==='sales')salesTab=tab;else if(mod==='ar')arTab=tab;else if(mod==='inventory')inventoryTab=tab}render()}
   });
-}catch(e){$('sync').textContent='Error de carga';$('dashboard').textContent='No se pudo cargar la demo. Comprueba el servidor local y vuelve a cargar la página.';console.error(e)}finally{$('sync').classList.remove('loading')}
+}catch(e){$('sync').textContent='Error de carga';$('dashboard').textContent=e.message||'No se pudo cargar el reporte.';
+  if(location.search){const back=document.createElement('a');back.href='/';back.textContent='Volver a Ventas';$('dashboard').append(' ',back)}
+  console.error(e)}finally{$('sync').classList.remove('loading')}
 function renderStatement(filtered,period){
   const currency=$('currency').value,id=$('statementCustomer').value,name=selected('statementCustomer');
   if(!id){$('dashboard').textContent='Selecciona un cliente.';return}
@@ -362,7 +430,7 @@ function renderStatement(filtered,period){
     return '<button class="link" data-a="'+open+'">'+esc(e.reference)+' ↗</button>';
   }
   const movementRows=s.events.map(e=>[day(e.date),esc(e.label),movementLink(e),esc(e.doc.number),money(Math.max(0,e.delta)),money(Math.max(0,-e.delta)),money(e.balance)]);
-  const open=s.open.map(d=>[linkRows(d.number,[d],true,'Corte '+day(end)),day(d.issued),day(d.due),d.days>0?'Vencido':'Por vencer',money(d.value)]);
+  const open=s.open.map(d=>[linkRows(d.number,[d],true,'Corte '+day(end)),day(d.issued),day(d.due),d.payment?'Pago sin aplicar':d.days>0?'Vencido':'Por vencer',money(d.value)]);
   $('dashboard').innerHTML='<h2>'+esc(name)+'</h2><p class="detailsum">Corte '+day(end)+' · '+esc(currency)+' · '+esc(note)+'</p>'+overview+
     panel('Movimientos del período',range,reportTable(tables[0].headers,movementRows)+(movementRows.length?'':'<p class="empty">Sin movimientos en el período.</p>'))+
     panel('Documentos abiertos al corte',s.open.length+' documentos · '+money(sum(s.open)),reportTable(tables[1].headers,open));

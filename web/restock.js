@@ -43,20 +43,21 @@ export function suggestions(data,options){
     const available=p?.reserved==null?null:c.closing-p.reserved;
     const hist=periods.map(month=>cuts.get(JSON.stringify([c.product,c.warehouse,month])));
     const complete=hist.every(h=>h&&policies.get(h.id)?.sales_complete);
-    const windowDays=periods.reduce((n,m)=>n+days(m),0);
+    const coveredDays=m=>data.cutoff?.startsWith(m)?Number(data.cutoff.slice(-2)):days(m);
+    const windowDays=periods.reduce((n,m)=>n+coveredDays(m),0);
     const net=complete?hist.reduce((n,h)=>n+(sales.get(h.id)||0),0):null;
     const observations=[];
     for(const cut of hist){
       if(!cut)continue;
       const daily=observed.get(cut.id);
-      for(let d=1;d<=days(cut.period);d++){
+      for(let d=1;d<=coveredDays(cut.period);d++){
         observations.push(daily?.get(cut.period+'-'+String(d).padStart(2,'0')));
       }
     }
     const demand=demandEstimate(net,observations,windowDays);
     const {rate}=demand;
     const coverage=rate>0&&available!=null?Math.max(0,available)/rate:null;
-    const end=c.period+'-'+days(c.period);
+    const end=data.cutoff??(c.period+'-'+days(c.period));
     const deadline=lead==null?null:new Date(Date.parse(end)+lead*86400000).toISOString().slice(0,10);
     const inbound=data.inbound.filter(i=>i.cut===c.id&&i.state==='confirmed'&&i.arrival>end&&deadline&&i.arrival<=deadline);
     const incoming=inbound.reduce((n,i)=>n+i.open_units,0);

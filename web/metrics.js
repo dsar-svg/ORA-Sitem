@@ -19,18 +19,21 @@ export function prepare(data) {
 export const sum = rows => rows.reduce((n,r) => n + r.value,0);
 export function sales(docs,month,product='') {
   return docs.filter(d => d.issued.startsWith(month)).flatMap(d => {
+    if (d.net !== undefined && !product) return [{...d,value:d.sign*d.net}];
     const lines = d.lines.filter(l => !product || l.product === product);
     return lines.length ? [{...d,lines,value:d.sign*lines.reduce((n,l)=>n+l.net,0)}] : [];
   });
 }
 export function balances(docs,end) {
   return docs.filter(d => d.issued <= end).map(d => {
-    const gross = d.lines.reduce((n,l)=>n+l.net+l.tax,0);
+    const gross = d.gross ?? d.lines.reduce((n,l)=>n+l.net+l.tax,0);
     const paid = d.payments.filter(p=>p.posted<=end).reduce((n,p)=>n+p.amount,0);
     const days = (Date.parse(end)-Date.parse(d.due))/86400000;
-    return {...d,value:(gross-paid)*d.sign,days,bucket:days<=0?'Por vencer':days<=30?'1–30 días':days<=60?'31–60 días':days<=90?'61–90 días':'Más de 90 días'};
+    return {...d,value:(gross-paid)*d.sign,days,bucket:d.payment?'Pago sin aplicar':days<=0?'Por vencer':days<=30?'1–30 días':days<=60?'31–60 días':days<=90?'61–90 días':'Más de 90 días'};
   }).filter(d => d.value !== 0);
 }
+// Unapplied customer payments carry a due date in Odoo but are credits waiting to be matched, not overdue debt.
+export const overdue = d => d.days > 0 && !d.payment;
 export function groups(rows,key) {
   const map = new Map();
   for (const row of rows) {

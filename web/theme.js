@@ -36,9 +36,11 @@ export function initAppearance(profile='demo-local'){
   function apply(next,save=true){
     choice=next;
     const p=palettes[choice.palette],accent=accessibleAccent(choice.accent,p);
-    for(const [k,v] of Object.entries({plum:accent,paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary})){
+    const vars={plum:accent,paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
+    for(const [k,v] of Object.entries(vars)){
       document.documentElement.style.setProperty('--'+k,v);
     }
+    try{localStorage.setItem('ora.appearance.boot',JSON.stringify(vars))}catch{}
     document.documentElement.dataset.palette=choice.palette;
     document.querySelectorAll('[data-palette]').forEach(b=>{
       if(b.tagName==='BUTTON') b.setAttribute('aria-pressed',b.dataset.palette===choice.palette);
@@ -75,5 +77,5 @@ export function exportBrand(){
   ctx.clearRect(110,0,50,48);
   ctx.fillStyle=secondary;ctx.fillRect(124,10,24,24);
   ctx.fillStyle=foreground;ctx.beginPath();ctx.arc(80,80,11,0,Math.PI*2);ctx.fill();
-  return {accent,foreground,paper,surface,logo:canvas.toDataURL('image/png'),signature:'Generado con ORA'};
+  return {accent,secondary,foreground,paper,surface,logo:canvas.toDataURL('image/png'),signature:'Generado con ORA'};
 }
