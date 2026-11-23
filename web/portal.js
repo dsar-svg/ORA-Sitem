@@ -23,6 +23,8 @@ const icon = k => '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><pat
 document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=icon(e.dataset.icon));
 const decimal = new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const money = cents => $('currency').value+'\u00a0'+(cents<0?'−':'')+decimal.format(Math.abs(cents)/100);
+// Compact axis labels (1,5 M · 771 mil) fit the 45-unit gutter at any scale.
+const axis = new Intl.NumberFormat('es',{notation:'compact',maximumSignificantDigits:2});
 const pct = n => new Intl.NumberFormat('es-VE',{maximumFractionDigits:1}).format(n)+' %';
 const monthDate = month => new Date(month+'-15T12:00:00Z');
 const monthName = month => new Intl.DateTimeFormat('es-VE',{month:'long',year:'numeric',timeZone:'UTC'}).format(monthDate(month));
@@ -120,7 +122,7 @@ function chart(current,prior,period,prev){
   const y=v=>131-(v-low)/(top-low)*109;
   const grid=[0,0.5,1].map(f=>{
     const v=low+(top-low)*f;
-    return '<path d="M45 '+y(v)+'H479" stroke="var(--line)" stroke-dasharray="3 4"/><text x="40" y="'+(y(v)+4)+'" text-anchor="end">'+Math.round(v/100).toLocaleString('es-VE')+'</text>';
+    return '<path d="M45 '+y(v)+'H479" stroke="var(--line)" stroke-dasharray="3 4"/><text x="40" y="'+(y(v)+4)+'" text-anchor="end">'+axis.format(v/100)+'</text>';
   }).join('');
   const bars=series.map((s,j)=>s.map((rows,i)=>{
     const x=58+i*71+j*22, val=sum(rows),title=(j?monthName(prev):monthName(period))+' · días '+(1+(bounds[i-1]||0))+'–'+bounds[i];
@@ -370,6 +372,7 @@ try{
   document.querySelector('.badge').textContent=(data.reportMonth?'Odoo':'Demo')+' · '+({basico:'Básico',intermedio:'Intermedio',avanzado:'Avanzado'})[data.plan];
   document.querySelector('footer span').textContent=data.reportMonth?'Fuente: Odoo':'Datos sintéticos de demostración';
   document.querySelector('#accountMenu summary span').textContent=data.user==='demo-local'?'Perfil de demo':data.user;
+  document.querySelector('#accountMenu summary').title=data.user==='demo-local'?'':data.user;
   options('statementCustomer',[...data.customer].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c=>[c.id,c.name]));
   $('sync').textContent='Última sincronización · '+new Date(data.synced).toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'});
   options('period',[...new Set(docs.map(d=>d.issued.slice(0,7)))].sort().reverse().map(m=>[m,cap(monthName(m))]));

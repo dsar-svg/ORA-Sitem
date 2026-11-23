@@ -271,3 +271,4 @@ button.hrow:hover,.directory-row:hover,.directory-row:focus-visible,tr:focus-wit
 .kpi,.statement-focus>div{min-width:0}.kpi strong,.statement-focus strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .kpis:has(.primary):has(.kpi:nth-child(4)){grid-template-columns:1.4fr 1fr 1fr 1fr}
 @media(max-width:1200px){.kpis:has(.primary):has(.kpi:nth-child(4)){grid-template-columns:1fr 1fr 1fr}.kpis:has(.kpi:nth-child(4)) .primary{grid-column:1/-1}}
+#accountMenu summary{min-width:0}#accountMenu summary span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#accountMenu summary i{flex:none}
