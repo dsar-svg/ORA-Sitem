@@ -9,10 +9,24 @@ function days(period){
   const [year,month]=period.split('-').map(Number);
   return new Date(Date.UTC(year,month,0)).getUTCDate();
 }
+// The source certifies one observation per local day, product and warehouse.
+export function demandEstimate(net,observations,calendarDays){
+  const availableDays=observations.filter(day=>day==='full'||day==='partial').length;
+  const outDays=observations.filter(day=>day==='out').length;
+  const partialDays=observations.filter(day=>day==='partial').length;
+  const complete=availableDays+outDays===calendarDays && observations.length===calendarDays;
+  const rate=net!=null&&complete&&availableDays>0?Math.max(0,net/availableDays):null;
+  return {rate,availableDays,outDays,partialDays,complete};
+}
 export function suggestions(data,options){
   const periods=monthsEnding(options.period,options.months);
   const cuts=new Map(data.stock_cut.map(c=>[JSON.stringify([c.product,c.warehouse,c.period]),c]));
   const policies=new Map(data.stock_policy.map(p=>[p.cut,p]));
+  const observed=new Map();
+  for(const row of data.stock_day||[]){
+    if(!observed.has(row.cut))observed.set(row.cut,new Map());
+    observed.get(row.cut).set(row.posted,row.availability);
+  }
   const sales=new Map();
   for(const m of data.stock_move){
     if(m.kind==='sale'||m.kind==='return')sales.set(m.cut,(sales.get(m.cut)||0)-m.units);
@@ -31,7 +45,16 @@ export function suggestions(data,options){
     const complete=hist.every(h=>h&&policies.get(h.id)?.sales_complete);
     const windowDays=periods.reduce((n,m)=>n+days(m),0);
     const net=complete?hist.reduce((n,h)=>n+(sales.get(h.id)||0),0):null;
-    const rate=complete?Math.max(0,net/windowDays):null;
+    const observations=[];
+    for(const cut of hist){
+      if(!cut)continue;
+      const daily=observed.get(cut.id);
+      for(let d=1;d<=days(cut.period);d++){
+        observations.push(daily?.get(cut.period+'-'+String(d).padStart(2,'0')));
+      }
+    }
+    const demand=demandEstimate(net,observations,windowDays);
+    const {rate}=demand;
     const coverage=rate>0&&available!=null?Math.max(0,available)/rate:null;
     const end=c.period+'-'+days(c.period);
     const deadline=lead==null?null:new Date(Date.parse(end)+lead*86400000).toISOString().slice(0,10);
@@ -50,7 +73,9 @@ export function suggestions(data,options){
       else status=rate>0&&(coverage<=lead||position<target)?statuses[1]:statuses[2];
     }
     const missing=[!complete&&'historial de ventas',lead==null&&'plazo',safety==null&&'seguridad',available==null&&'reservas',!p?.receipts_complete&&'recepciones'].filter(Boolean);
-    result.push({...c,name:names.get(c.product),sku:a.sku,unit:a.unit,store:stores.get(c.warehouse),reserved:p?.reserved,available,rate,coverage,lead,safety,position,point,target,qty,status,net,windowDays,inbound,incoming,missing,end,orderDate});
+    if(!demand.complete)missing.push('historial diario de disponibilidad');
+    else if(!demand.availableDays)missing.push('días con stock para estimar la demanda');
+    result.push({...c,name:names.get(c.product),sku:a.sku,unit:a.unit,store:stores.get(c.warehouse),reserved:p?.reserved,available,rate,coverage,lead,safety,position,point,target,qty,status,net,windowDays,demand,inbound,incoming,missing,end,orderDate});
   }
   return result.filter(r=>!options.priority||r.status===options.priority).sort((a,b)=>statuses.indexOf(a.status)-statuses.indexOf(b.status)||a.name.localeCompare(b.name));
 }
@@ -62,7 +87,7 @@ export function renderRestock(data,options,ui){
   function detail(r){
     const facts=[
       ['Corte',r.end],['Existencias físicas',number(r.closing)],['Reservas pendientes',number(r.reserved)],['Disponible = físico − reservas',number(r.available)],
-      ['Salidas netas / días',number(r.net)+' / '+r.windowDays],['Consumo diario',number(r.rate)],['Plazo de entrega',number(r.lead)+' días'],
+      ['Salidas netas / días con stock',number(r.net)+' / '+r.demand.availableDays],['Días de la ventana',r.windowDays],['Días con stock parcial (incluidos)',r.demand.partialDays],['Días totalmente agotados (excluidos)',r.demand.outDays],['Consumo diario estimado',number(r.rate)],['Plazo de entrega',number(r.lead)+' días'],
       ['Stock de seguridad',number(r.safety)],['Recepciones confirmadas a tiempo',r.inbound.map(i=>i.id+' · '+i.arrival+' · '+i.open_units+' '+r.unit).join(', ')||(r.missing.includes('recepciones')?'Sin historial confirmado':'Ninguna')],
       ['Posición = disponible + recepciones',number(r.position)],['Punto = consumo × plazo + seguridad',number(r.point)],
       ['Objetivo = punto + 7 días de consumo',number(r.target)],['Cantidad para revisión',number(r.qty)+' '+r.unit],

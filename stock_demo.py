@@ -1,8 +1,11 @@
 """Monthly physical counts and posted warehouse movements in base units."""
+from calendar import monthrange
+from datetime import date, timedelta
+
 def inventory_fixture():
     warehouses = [("CCS", "Principal · Caracas"), ("VAL", "Regional · Valencia")]
     categories = ["Café e infusiones", "Despensa", "Aceites", "Despensa", "Despensa"]
-    data = dict(warehouse=warehouses, article=[], stock_cut=[], stock_move=[])
+    data = dict(warehouse=warehouses, article=[], stock_cut=[], stock_move=[], stock_day=[])
     for i, category in enumerate(categories):
         product = str(i)
         data["article"].append((product, f"AND-{101+i}", category, "ud"))
@@ -24,6 +27,16 @@ def inventory_fixture():
                     moves += [(12, "transfer", -2 if warehouse == "CCS" else 2)]
                 closing = opening + sum(units for _, _, units in moves)
                 reference = f"CUT-{key}"
+                if opening is not None and not (i == 4 and warehouse == "VAL"):
+                    balance = opening
+                    for day in range(1, monthrange(2026,month)[1]+1):
+                        levels = [balance]
+                        for move_day, _, units in moves:
+                            if move_day == day:
+                                balance += units
+                                levels.append(balance)
+                        availability = "full" if min(levels)>0 else "partial" if max(levels)>0 else "out"
+                        data["stock_day"].append((reference,f"{period}-{day:02}",availability))
                 data["stock_cut"].append((reference, period, product, warehouse,
                     opening if i != 4 or warehouse != "VAL" else None, closing,
                     [65,30,10,None,15][i]))
@@ -33,8 +46,6 @@ def inventory_fixture():
                         data["stock_move"].append((f"{key}-{j}",reference,
                             f"{period}-{day:02}",kind,units,ref))
                 opening = closing
-    from datetime import date, timedelta
-    from calendar import monthrange
     data.update(stock_policy=[],inbound=[])
     for cut,period,product,warehouse,opening,closing,minimum in data["stock_cut"]:
         lead = None if product=="1" and warehouse=="VAL" else 14

@@ -152,13 +152,13 @@ Pruebas de almacenamiento y permisos: `python -m unittest -v`. Pruebas del cálc
 
 La primera visita ofrece un recorrido general. En el menú de usuario al pie de la barra lateral, **Recorrido guiado** permite repetirlo o elegir una sección. Básico incluye Ventas y Documentos. Intermedio y Avanzado incorporan Cobranza, Estados de cuenta, Clientes, Inventario y Reposición. Escape pausa el recorrido y retoma el paso al volver. Omitir y Finalizar cierran el recorrido. ORA conserva el progreso en ese navegador para la combinación de empresa, usuario y plan.
 
-El generador común de Excel y PDF captura el tema efectivo al pulsar la descarga. El logo Foco y «Generado con ORA» identifican la empresa y el reporte. En Excel, el resumen incorpora el logo y las hojas de datos tienen autofiltro y columnas numéricas. El PDF repite la firma, la empresa, el origen y la paginación, además de los encabezados de las tablas que continúan. Para comparar paletas, exporta el estado de Abastos El Parque en octubre, cambia el acento desde Apariencia y repite la descarga. Los ejemplos están en la carpeta hermana **Reportes firmados**.
+El generador común de Excel y PDF captura el tema efectivo al pulsar la descarga. El logo Foco y «Generado con ORA» identifican la empresa y el reporte. En Excel, el resumen incorpora el logo y las hojas de datos tienen autofiltro y columnas numéricas. El PDF repite la firma, la empresa, el origen y la paginación, además de los encabezados de las tablas que continúan. Para comparar paletas, exporta el estado de Abastos El Parque en octubre, cambia el acento desde Apariencia y repite la descarga. En el PDF, el primer cuadro muestra saldo final y vencido, seguido del desglose y las partidas del cliente.
 
 ## Reposición
 
 En Intermedio o Avanzado abre **Inventario → Reposición** y elige octubre de 2026. Cada fila representa un producto en un almacén y en su unidad de inventario. Selecciona el producto para abrir los datos del cálculo. El grupo de prioridades y el detalle se pueden exportar con los mismos filtros. Básico carece de los datos de inventario en la respuesta de la API y el servidor restringe el módulo de reposición. Las sugerencias se calculan en el navegador y quedan para revisión humana.
 
-El consumo diario es la suma de salidas por venta menos devoluciones dividida entre los días naturales de uno, dos o tres meses cerrados consecutivos. El consumo mínimo es cero. Transferencias, ajustes y compras quedan fuera de la demanda. El disponible corresponde al físico del corte menos las reservas pendientes. La posición suma al disponible el pendiente de recibir confirmado con llegada posterior al corte y hasta el último día del plazo, inclusive. Una recepción ya contabilizada forma parte del físico. Una recepción cancelada, en borrador o posterior al plazo no incrementa la posición.
+El consumo diario es la suma de salidas por venta menos devoluciones dividida entre los días con stock de uno, dos o tres meses cerrados consecutivos. El conector certifica la disponibilidad por día, producto y almacén en `stock_day(cut,posted,availability)`. Un día completo o parcial con stock cuenta una vez, incluso con cero ventas. Un día totalmente agotado se excluye. En la demo se reconstruyen estos estados con el físico inicial y todos los movimientos de la jornada. Con 10, 8 y 0 unidades en tres días con stock y dos días agotados, el consumo es 18 / 3 = 6 unidades por día. Si falta una observación, el historial de ventas o todo el período estuvo agotado, la demanda queda sin calcular. El consumo mínimo es cero. Transferencias, ajustes y compras quedan fuera de la demanda. El disponible corresponde al físico del corte menos las reservas pendientes. La posición suma al disponible el pendiente de recibir confirmado con llegada posterior al corte y hasta el último día del plazo, inclusive. Una recepción ya contabilizada forma parte del físico. Una recepción cancelada, en borrador o posterior al plazo no incrementa la posición.
 
 El punto de reposición es consumo diario × plazo de entrega + seguridad. Cuando la posición cae por debajo de ese punto, ORA propone alcanzar el punto más **siete días adicionales de consumo**, redondeando la compra hacia arriba en unidades enteras. Los siete días representan una revisión semanal. El plazo y la seguridad provienen de la política del producto y almacén. Los ajustes introducidos en pantalla sustituyen esos valores para la consulta actual. La fecha estimada para pedir supone consumo constante y las recepciones consideradas al corte. La cobertura usa solo el disponible físico y se expresa en días si hay consumo.
 
@@ -169,6 +169,45 @@ El punto de reposición es consumo diario × plazo de entrega + seguridad. Cuand
 | Sin urgencia | La política y el historial permiten calcular una sugerencia de cero y hay margen suficiente. |
 | Datos insuficientes | Falta el historial completo de ventas, el plazo, la seguridad, las reservas o la cobertura de recepciones confirmadas. La cantidad queda sin calcular. |
 
-En octubre, el aceite de Caracas tiene cero disponible y requiere 36 unidades. El aceite de Valencia también está agotado, con 90 unidades confirmadas para el 1 de noviembre. Su sugerencia es cero y queda marcado para seguimiento de la recepción. El azúcar de Valencia carece de historial suficiente y el arroz de Valencia tiene pendiente el plazo. El maíz tiene demanda cero acreditada.
+En octubre, el aceite de Caracas tiene cero disponible y requiere 42 unidades (35 salidas en 25 días con stock). El aceite de Valencia también está agotado, con 90 unidades confirmadas para el 1 de noviembre. Su sugerencia es cero y queda marcado para seguimiento de la recepción. El azúcar de Valencia carece de historial suficiente y el arroz de Valencia tiene pendiente el plazo. El maíz tiene demanda cero acreditada.
 
 Para incorporar otra fuente, el conector entrega una política por corte en `stock_policy` y las líneas pendientes en `inbound`. Los identificadores de línea deben ser únicos en la instantánea de empresa, incluso si se conservan varios cortes de la misma recepción. Ambos conjuntos, el físico, las reservas y los movimientos se sincronizan juntos. Antes de habilitar sugerencias de Odoo, validar por almacén la unidad de medida, el corte histórico de reservas, los plazos del proveedor, la fecha prevista y el pendiente real de recepciones parciales. La prueba disponible usa exclusivamente la empresa sintética. Las reglas se pueden probar con `node test_restock.mjs`.
+
+### Configuración pendiente para la instancia Odoo
+
+Registrar la URL HTTPS, la base de datos, la versión, el alojamiento, la compañía, la zona horaria, las sucursales, los almacenes y la unidad de cada producto. Crear un usuario técnico con permisos de lectura sobre los modelos acordados y reglas de registro limitadas a esa compañía. Entregar la clave al futuro conector mediante un gestor de secretos. La demo local funciona sin clave y lee el modelo sintético.
+
+En Odoo 19 con JSON-2, revisar el catálogo de la instancia en `/doc` y la disponibilidad del acceso externo. La clave se envía como Bearer y la base mediante `X-Odoo-Database` cuando corresponda. Limitar las llamadas a métodos de consulta como `search_read` y validar una lectura de la compañía con esa misma identidad. Para Odoo 18 consultar el mecanismo XML-RPC documentado para esa versión. [API oficial de Odoo 19](https://www.odoo.com/documentation/19.0/developer/reference/external_api.html) · [API oficial de Odoo 18](https://www.odoo.com/documentation/18.0/developer/reference/external_api.html).
+
+Para conciliar un mes cerrado, cotejar con el ERP empresa, fechas contables, sucursal y moneda. Comparar las ventas sin impuestos por factura y nota de crédito. Para el estado de cuenta, comprobar apertura, movimientos aplicados hasta el corte, abiertos y vencidos por cliente. Para Reposición, conciliar el físico y las reservas por almacén, ventas netas de devoluciones, días con disponibilidad parcial o agotamiento y cantidades pendientes por línea de recepción. Una foto de existencias actuales por sí sola no certifica el historial diario.
+
+### Probar el mismo commit en un VPS Linux
+
+Con Python 3.10 o posterior, desde una sesión SSH del VPS, clona el repositorio y cambia al SHA del PR que deseas probar. Elige un directorio de datos exclusivo para la demo.
+
+```sh
+git clone https://github.com/dsar-svg/ORA-Sitem.git ora-piloto
+cd ora-piloto
+git checkout --detach <SHA-del-PR>
+export ORA_PLAN=intermedio
+export ORA_DATA_DIR="$HOME/.local/share/ora-demo"
+python3 app.py demo
+python3 app.py serve --port 8765
+```
+
+Sustituye el marcador de SHA antes de ejecutar el comando. El servicio escucha en la interfaz local. Desde tu equipo abre un túnel con `ssh -L 8765:127.0.0.1:8765 usuario@servidor` y visita el puerto 8765 de localhost. Para servir la aplicación a varios usuarios configura las cuentas indicadas en «Probar el piloto Básico» y un proxy HTTPS.
+## Acceso al piloto con la cuenta de Odoo
+
+Para una instalación Odoo 17, ORA puede validar el correo y la contraseña local mediante HTTPS en `/web/session/authenticate`. Define las variables en el proceso o crea el archivo privado `.env.odoo` junto a `app.py`. Sustituye los ejemplos por los datos de la instalación.
+
+```dotenv
+ODOO_URL=https://empresa.odoo.com
+ODOO_DB=nombre-de-base
+ORA_ERP_USERS=persona@empresa.example
+```
+
+El servidor admite `NEXT_PUBLIC_ODOO_URL` como alias de la URL. La lista de correos asigna las plazas del plan y admite varios correos separados por comas. Si hay varias empresas en la base, `ODOO_COMPANY_ID` fija el identificador permitido. Si se omite, se comprueba el acceso a la compañía principal del usuario. Reinicia ORA cuando cambies la configuración. En el piloto local ejecuta `python app.py serve --port 8770` y abre `http://127.0.0.1:8770/login`.
+
+El formulario envía la contraseña al servidor de ORA, que la usa únicamente para validar el acceso en la instancia configurada. El servidor comprueba base, identidad, usuario interno y compañía. Una vez confirmado el usuario, ORA crea su propia sesión en memoria, con duración máxima de una hora. Puedes cerrarla desde el menú de usuario. Para servir el portal fuera de localhost usa un proxy HTTPS y define `ORA_PUBLIC_ORIGIN` con el origen HTTPS del portal para activar la cookie segura.
+
+La prueba admite contraseñas locales de Odoo. Para cuentas con inicio federado o segundo factor, queda pendiente integrar el flujo correspondiente. ORA exige una identidad completamente autenticada. El modo Odoo actual sirve los reportes sintéticos. Antes de publicar reportes reales hay que vincular la empresa y los permisos sobre registros a la fuente sincronizada. La clave de API destinada a sincronización se provisionará por separado. [Controlador de sesión de Odoo 17](https://github.com/odoo/odoo/blob/17.0/addons/web/controllers/session.py).
