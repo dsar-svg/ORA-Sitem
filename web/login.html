@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#432438">
+  <title>Iniciar sesión · ORA</title><link rel="stylesheet" href="/style.css">
+  <script src="/login.js" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-layout">
+    <section class="login-identity" aria-label="ORA">
+      <div class="brand"><i class="focus" aria-hidden="true"></i>ORA</div>
+      <div class="login-art" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+      <p>Reportes y seguimiento listos. <strong>Más tiempo para decidir.</strong></p>
+    </section>
+    <section class="login-sheet" aria-labelledby="login-title">
+      <div class="login-source"><i aria-hidden="true"></i>{{host}}</div>
+      <h1 id="login-title">Iniciar sesión</h1>
+      <p class="login-intro">Entra a tus reportes con tu cuenta de Odoo.</p>
+      <form method="post" action="/login">
+        <label for="email">Correo de Odoo</label>
+        <input type="email" name="email" id="email" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="tu@empresa.com" required>
+        <label for="password">Contraseña</label>
+        <div class="login-password">
+          <input type="password" name="password" id="password" autocomplete="current-password" required>
+          <button type="button" id="togglePassword" aria-label="Mostrar contraseña" aria-controls="password" hidden>Mostrar</button>
+        </div>
+        <p class="login-error" role="alert">{{message}}</p>
+        <button class="login-submit" type="submit">Entrar a ORA <span aria-hidden="true">→</span></button>
+      </form>
+    </section>
+  </main>
+</body></html>

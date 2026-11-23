@@ -296,9 +296,12 @@ $('close').onclick=()=>$('detail').close();
 try{
   $('sync').classList.add('loading');
   const response=await fetch('/api/demo');
+  if(response.status===401 && !response.headers.has('WWW-Authenticate')){location.replace('/login');throw Error('Sesión expirada')}
   if(!response.ok) throw Error();
   data=await response.json(); docs=prepare({...data,settlement:data.settlement??[]});
   if(data.modules.includes('inventory'))({renderRestock}=await import('./restock.js'));
+  $('logout').hidden=!data.erpCompany;
+  if(data.erpCompany)window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
   initAppearance(data.user||'demo-local');
   docs.forEach(d=>d.fullGross=gross(d));
   const assignments=new Map(data.assignment.map(a=>[a.document,a.seller]));

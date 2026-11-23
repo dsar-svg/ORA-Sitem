@@ -196,3 +196,18 @@ python3 app.py serve --port 8765
 ```
 
 Sustituye el marcador de SHA antes de ejecutar el comando. El servicio escucha en la interfaz local. Desde tu equipo abre un túnel con `ssh -L 8765:127.0.0.1:8765 usuario@servidor` y visita el puerto 8765 de localhost. Para servir la aplicación a varios usuarios configura las cuentas indicadas en «Probar el piloto Básico» y un proxy HTTPS.
+## Acceso al piloto con la cuenta de Odoo
+
+Para una instalación Odoo 17, ORA puede validar el correo y la contraseña local mediante HTTPS en `/web/session/authenticate`. Define las variables en el proceso o crea el archivo privado `.env.odoo` junto a `app.py`. Sustituye los ejemplos por los datos de la instalación.
+
+```dotenv
+ODOO_URL=https://empresa.odoo.com
+ODOO_DB=nombre-de-base
+ORA_ERP_USERS=persona@empresa.example
+```
+
+El servidor admite `NEXT_PUBLIC_ODOO_URL` como alias de la URL. La lista de correos asigna las plazas del plan y admite varios correos separados por comas. Si hay varias empresas en la base, `ODOO_COMPANY_ID` fija el identificador permitido. Si se omite, se comprueba el acceso a la compañía principal del usuario. Reinicia ORA cuando cambies la configuración. En el piloto local ejecuta `python app.py serve --port 8770` y abre `http://127.0.0.1:8770/login`.
+
+El formulario envía la contraseña al servidor de ORA, que la usa únicamente para validar el acceso en la instancia configurada. El servidor comprueba base, identidad, usuario interno y compañía. Una vez confirmado el usuario, ORA crea su propia sesión en memoria, con duración máxima de una hora. Puedes cerrarla desde el menú de usuario. Para servir el portal fuera de localhost usa un proxy HTTPS y define `ORA_PUBLIC_ORIGIN` con el origen HTTPS del portal para activar la cookie segura.
+
+La prueba admite contraseñas locales de Odoo. Para cuentas con inicio federado o segundo factor, queda pendiente integrar el flujo correspondiente. ORA exige una identidad completamente autenticada. El modo Odoo actual sirve los reportes sintéticos. Antes de publicar reportes reales hay que vincular la empresa y los permisos sobre registros a la fuente sincronizada. La clave de API destinada a sincronización se provisionará por separado. [Controlador de sesión de Odoo 17](https://github.com/odoo/odoo/blob/17.0/addons/web/controllers/session.py).
