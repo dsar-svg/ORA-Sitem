@@ -107,8 +107,13 @@ function openRows(title,rows,receivables=moduleName==='ar',extra='',range,asOf=l
   showDetail(title,'DOCUMENTOS DE RESPALDO',body);
 }
 function drill(name,rows,range){return action(()=>openRows(name,rows,moduleName==='ar','',range))}
-function kpi(title,value,sub,symbol,rows,primary=false){
-  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span>'+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
+function kpi(title,value,sub,symbol,rows,primary=false,extra=''){
+  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span>'+extra+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
+}
+// Where the figure comes from and its cut-off date: the trust anchor under every headline figure.
+function provenance(cents){
+  const r=data.bolivar,bs=r&&$('currency').value===r.currency?'<span class="bs">≈ Bs '+decimal.format(cents/100*parseFloat(r.rate))+' · tasa Odoo '+decimal.format(parseFloat(r.rate))+' Bs/'+esc(r.currency)+' del '+day(r.date)+'</span>':'';
+  return bs+'<span class="source">'+(data.reportMonth?'Fuente: Odoo':'Datos de demostración')+' · corte '+day(lastDay())+'</span>';
 }
 function panel(title,sub,body){return '<article class="panel"><h2>'+title+'</h2><p class="hint">'+esc(sub)+'</p>'+body+'</article>'}
 function dot(color){return '<i class="dot" style="background:'+color+'"></i>'}
@@ -158,13 +163,14 @@ function distribution(rows){
   return g.map(k=>horizontal(k.name,money(k.value)+' · '+(total?pct(k.value/total*100):'—'),k.value,max,drill(k.name,k.docs))).join('') || '<p class="empty">Sin movimientos.</p>';
 }
 function horizontal(name,value,n,max,id,highlight=false){
-  return '<button class="hrow '+(highlight?'priority':'')+'" data-a="'+id+'"><div><strong>'+esc(name)+'</strong><b>'+esc(value)+'</b></div><span class="track"><i style="width:'+Math.abs(n)/max*100+'%"></i></span></button>';
+  return '<button class="hrow '+(highlight?'priority':'')+'" data-a="'+id+'"><div><strong title="'+esc(name)+'">'+esc(name)+'</strong><b>'+esc(value)+'</b></div><span class="track"><i style="width:'+Math.abs(n)/max*100+'%"></i></span></button>';
 }
 function breakdown(title,label,entries,total){
   const ar=moduleName==='ar';
   return panel(title,'Selecciona una fila para consultar sus documentos.','<div class="table-wrap"><table class="breakdown"><thead><tr><th>'+label+'</th><th class="num">Documentos</th><th class="num">Participación</th><th class="num">Importe</th>'+(ar?'<th class="num">Vencido</th>':'')+'<th>Detalle</th></tr></thead><tbody>'+entries.map(g=>{
     const share=total?g.value/total*100:0;
-    return '<tr><td>'+esc(g.name)+'</td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(overdue)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos</button></td></tr>';
+    const open=drill(g.name,g.docs);
+    return '<tr data-a="'+open+'"><td><button class="link name-link" data-a="'+open+'">'+esc(g.name)+'</button></td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(overdue)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos</button></td></tr>';
   }).join('')+'</tbody></table></div>'+(entries.length?'':'<p class="empty">Sin movimientos para estos filtros.</p>'));
 }
 function render(){
@@ -247,7 +253,9 @@ function render(){
     viewReport.summary.push(['Facturas netas sin impuestos',sum(current.filter(d=>d.sign===1))],['Notas de crédito',sum(current.filter(d=>d.sign<0))],['Comparativo '+rangeText(ranges.priorFirst,ranges.priorEnd),sum(prior)]);
     const invoices=current.filter(d=>d.sign===1), credits=current.filter(d=>d.sign===-1),net=sum(current);
     const previous=sum(prior),growth=previous>0?(net-previous)/previous*100:null;
-    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),'chart',current,true);
+    const recon=invoices.length+(invoices.length===1?' factura ':' facturas ')+money(sum(invoices))+(credits.length?' − '+credits.length+(credits.length===1?' nota de crédito ':' notas de crédito ')+money(-sum(credits)):'')+' = '+money(net)+' sin impuestos';
+    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),'chart',current,true,
+      '<span class="recon">'+esc(recon)+'</span>'+provenance(net));
     cards=kpi('Facturas emitidas',String(invoices.length),money(sum(invoices))+' sin impuestos','invoice',invoices)+
       kpi('Notas de crédito',money(sum(credits)),credits.length+(credits.length===1?' documento de ajuste':' documentos de ajuste'),'credit',credits);
     evolution=panel('Evolución de ventas',range+' frente a '+rangeText(ranges.priorFirst,ranges.priorEnd)+' · '+curr+(coverage?' · '+coverage:''),chart(current,prior,period,prev));
@@ -271,7 +279,9 @@ function render(){
     }
     const rows=balances(filtered,lastDay()),late=rows.filter(overdue),upcoming=rows.filter(d=>d.days<=0&&!d.payment),unapplied=rows.filter(d=>d.payment);
     const unit=data.firstMonth?' partidas':' documentos';
-    cards=kpi('Saldo pendiente',money(sum(rows)),rows.length+unit,'wallet',rows,true)+
+    const oldest=rows.filter(d=>d.bucket==='Más de 90 días');
+    cards=kpi('Saldo pendiente',money(sum(rows)),rows.length+unit,'wallet',rows,true,
+      (sum(oldest)>0?'<span class="alert">'+esc(money(sum(oldest)))+' con más de 90 días</span>':'')+provenance(sum(rows)))+
       kpi('Saldo vencido',money(sum(late)),late.length+unit,'clock',late)+
       kpi('Por vencer',money(sum(upcoming)),upcoming.length+unit,'calendar',upcoming)+
       (unapplied.length?kpi('Pagos sin aplicar',money(sum(unapplied)),unapplied.length+' pagos por conciliar','credit',unapplied):'');
@@ -279,13 +289,15 @@ function render(){
     const bands=buckets.map(k=>rows.filter(d=>d.bucket===k)),max=Math.max(1,...bands.map(x=>Math.abs(sum(x))));
     panels=panel('Antigüedad de saldos','Saldo por vencimiento al '+day(lastDay())+' · Selecciona un tramo para revisar sus facturas.',bands.map((b,i)=>horizontal(buckets[i],money(sum(b)),sum(b),max,drill(buckets[i],b),i===4)).join(''));
     const byClient=groups(rows,'customer').map(g=>({...g,name:g.docs[0].client}));
+    const debtors=top(groups(late,'customer').map(g=>({...g,name:g.docs[0].client})).filter(g=>g.value>0),5),most=Math.max(1,...debtors.map(g=>g.value));
+    panels+=panel('Mayores deudores','Saldo vencido al '+day(lastDay())+' · cinco principales',debtors.map(g=>horizontal(g.name,money(g.value)+' · '+new Set(g.docs.map(d=>d.id)).size+' doc.',g.value,most,drill(g.name,g.docs))).join('')||'<p class="empty">Sin saldos vencidos. Todo al día.</p>');
     table=breakdown('Cartera por cliente','Cliente',byClient,sum(rows));
     viewReport=documentReport('Cuentas por cobrar',rows,'Corte '+day(lastDay()));
     viewReport.summary.push(['Saldo vencido',sum(late)],['Por vencer',sum(upcoming)],...(unapplied.length?[['Pagos sin aplicar',sum(unapplied)]]:[]));
     viewReport.charts=[barChart('Antigüedad de saldos',buckets.map((name,i)=>({name,value:sum(bands[i])}))),barChart('Cartera por cliente (principales 15)',top(byClient))];
   }
   if(isSales){
-    $('dashboard').innerHTML='<div class="sales-overview"><div class="sales-summary">'+hero+'<p class="net-rule">Facturas contabilizadas menos notas de crédito, sin impuestos.</p><div class="support">'+cards+'</div></div><div class="trend">'+evolution+'</div></div><div class="ranking-pair">'+panels+'</div>'+table;
+    $('dashboard').innerHTML='<div class="sales-overview"><div class="sales-summary">'+hero+'<div class="support">'+cards+'</div></div><div class="trend">'+evolution+'</div></div><div class="ranking-pair">'+panels+'</div>'+table;
     return;
   }
   $('dashboard').innerHTML='<div class="kpis">'+cards+'</div><div class="panels">'+panels+'</div>'+table;
@@ -379,7 +391,9 @@ try{
   document.querySelector('#accountMenu summary span').textContent=data.user==='demo-local'?'Perfil de demo':data.user;
   document.querySelector('#accountMenu summary').title=data.user==='demo-local'?'':data.user;
   options('statementCustomer',[...data.customer].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c=>[c.id,c.name]));
-  $('sync').textContent='Última sincronización · '+new Date(data.synced).toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'});
+  const syncedAt=new Date(data.synced),stale=Date.now()-syncedAt>12*36e5;
+  $('sync').classList.toggle('stale',stale);
+  $('sync').textContent=(stale?'Datos del ':'Actualizado · ')+syncedAt.toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'})+(stale?' · pueden no reflejar Odoo hoy':'');
   options('period',[...new Set(docs.map(d=>d.issued.slice(0,7)))].sort().reverse().map(m=>[m,cap(monthName(m))]));
   options('branch',[['','Todas las sucursales'],...[...new Set(docs.map(d=>d.branch))].sort().map(b=>[b,b])]);
   options('currency',[...new Set([...docs,...(ledgerDocs??[])].map(d=>d.currency))].sort().reverse().map(c=>[c,c]));
@@ -421,7 +435,8 @@ try{
     navigate:(mod,tab)=>{if(!data.modules.includes(mod))return;moduleName=mod;
       if(tab){if(mod==='sales')salesTab=tab;else if(mod==='ar')arTab=tab;else if(mod==='inventory')inventoryTab=tab}render()}
   });
-}catch(e){$('sync').textContent='Error de carga';$('dashboard').textContent=e.message||'No se pudo cargar el reporte.';
+}catch(e){$('sync').textContent='No se pudo leer Odoo';$('sync').classList.add('failed');
+  $('dashboard').innerHTML='<div class="load-error" role="alert"><h2>No pudimos cargar este reporte</h2><p>Revisa tu conexión o que tu sesión de Odoo siga activa, y vuelve a intentarlo.</p><p class="hint">'+esc(e.message||'Error desconocido')+'</p><button class="retry" onclick="location.reload()">Reintentar</button></div>';
   if(location.search){const back=document.createElement('a');back.href='/';back.textContent='Volver a Ventas';$('dashboard').append(' ',back)}
   console.error(e)}finally{$('sync').classList.remove('loading');document.body.classList.remove('loading')}
 function renderStatement(filtered,period){

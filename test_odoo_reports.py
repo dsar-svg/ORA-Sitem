@@ -3,7 +3,8 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from odoo_inventory import inventory
-from odoo_sales import receivables, drop_group, tax_key
+from odoo_sales import receivables, drop_group, tax_key, bolivar_rate
+from erp_auth import ProviderUnavailable
 
 
 class LiveReportsTests(TestCase):
@@ -57,3 +58,11 @@ class LiveReportsTests(TestCase):
         self.assertEqual([(m["posted"],m["kind"]) for m in data["stock_move"]],
                          [("2026-01-12","sale"),("2026-01-31","return")])
         self.assertIsNone(data["stock_policy"][-1]["reserved"])
+
+    def test_bolivar_rate_from_localisation(self):
+        reader = Mock()
+        reader.call.return_value = [dict(name="2026-10-31",inverse_rate=919.8227)]
+        self.assertEqual(bolivar_rate(reader,9,"USD","2026-10-31"),dict(rate="919.8227",date="2026-10-31",currency="USD"))
+        self.assertIsNone(bolivar_rate(reader,9,"VES","2026-10-31"))
+        reader.call.side_effect = ProviderUnavailable()
+        self.assertIsNone(bolivar_rate(reader,9,"USD","2026-10-31"))

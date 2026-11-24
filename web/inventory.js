@@ -78,13 +78,15 @@ export function renderInventory(data,filters,ui){
       sort.direction=active?-sort.direction:1;sort.key=key;refresh();
       document.querySelector('[data-sort="'+key+'"]').focus();
     });
-    return '<th class="'+(['closing','out','turns'].includes(key)?'num':'')+'" aria-sort="'+(active?(sort.direction===1?'ascending':'descending'):'none')+'"><button data-sort="'+key+'" data-a="'+id+'">'+label+' '+(active?(sort.direction===1?'↑':'↓'):'↕')+'</button></th>';
+    return '<th class="'+(['closing','out','turns'].includes(key)?'num':'')+'" aria-sort="'+(active?(sort.direction===1?'ascending':'descending'):'none')+'"><button data-sort="'+key+'" data-a="'+id+'">'+label+'<i class="sort" data-dir="'+(active?(sort.direction===1?'up':'down'):'none')+'" aria-hidden="true"></i></button></th>';
   }).join('');
   const body=rows.map(r=>'<tr><td>'+esc(r.sku)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.warehouseName)+'</td><td class="num">'+fmt(r.closing)+' '+esc(r.unit)+'</td><td class="num">'+fmt(r.out)+'</td><td class="num">'+rotation(r.turns)+'</td><td>'+esc(r.status)+'</td><td><button class="link" data-a="'+action(()=>movements(r))+'">Movimientos</button></td></tr>').join('');
+  const urgent=rows.filter(r=>r.closing<=0||/Stock bajo/.test(r.status)).sort((a,b)=>a.closing-b.closing).slice(0,6);
   return '<div class="kpis">'+summary('Agotados',rows.filter(r=>r.closing<=0).length,'Referencias por almacén')+
     summary('Baja rotación',rows.filter(r=>r.turns!=null && r.turns<0.5).length,'Menos de 0,5 vueltas en el mes')+
     summary('Sin salidas',rows.filter(r=>!r.sold).length,'Sin despachos de venta')+'</div><div class="panels">'+
     panel('Mayor rotación','Vueltas por producto · almacenes seleccionados',bars||'<p class="empty">Sin productos con promedio disponible.</p>')+
-    panel('Criterios de revisión','Cálculo mensual por producto y almacén','<dl><dt>Reposición</dt><dd>Agotado con existencias ≤ 0. Stock bajo al quedar por debajo del mínimo configurado.</dd><dt>Rotación</dt><dd>Salidas por venta menos devoluciones, divididas entre el promedio de cierres diarios. Alta desde 1 vuelta y baja por debajo de 0,5.</dd><dt>Datos insuficientes</dt><dd>El promedio falta, no concilia con el corte o es menor o igual que cero.</dd></dl>')+
-    '</div>'+panel('Existencias por almacén','Corte '+day(end)+' · '+rows.length+' referencias','<div class="table-wrap"><table><thead><tr>'+headers+'<th>Detalle</th></tr></thead><tbody>'+body+'</tbody></table></div>'+(rows.length?'':'<p class="empty">Sin existencias registradas para estos filtros.</p>'));
+    panel('Para reponer','Agotados o bajo el mínimo al '+day(end),urgent.map(r=>'<button class="hrow priority" data-a="'+action(()=>movements(r))+'"><div><strong title="'+esc(r.name)+'">'+esc(r.name)+'</strong><b>'+fmt(r.closing)+' '+esc(r.unit)+' · '+esc(r.warehouseName)+'</b></div></button>').join('')||'<p class="empty">Nada por reponer con estos filtros.</p>')+
+    '</div>'+panel('Existencias por almacén','Corte '+day(end)+' · '+rows.length+' referencias','<div class="table-wrap"><table><thead><tr>'+headers+'<th>Detalle</th></tr></thead><tbody>'+body+'</tbody></table></div>'+(rows.length?'':'<p class="empty">Sin existencias registradas para estos filtros.</p>')+
+    '<details class="criteria"><summary>Cómo se calcula</summary><dl><dt>Reposición</dt><dd>Agotado con existencias ≤ 0. Stock bajo al quedar por debajo del mínimo configurado.</dd><dt>Rotación</dt><dd>Salidas por venta menos devoluciones, divididas entre el promedio de cierres diarios. Alta desde 1 vuelta y baja por debajo de 0,5.</dd><dt>Datos insuficientes</dt><dd>El promedio falta, no concilia con el corte o es menor o igual que cero.</dd></dl></details>');
 }

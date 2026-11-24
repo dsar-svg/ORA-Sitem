@@ -200,6 +200,21 @@ def drop_group(reader, data, company_vats):
     data["customer"] = [c for c in data["customer"] if c["id"] not in group]
 
 
+def bolivar_rate(reader,company_id,currency,end):
+    """Bs per unit of the company currency at the cutoff, as the ERP's Venezuelan localisation stores it."""
+    if currency in ("VES","VEF"):
+        return None
+    try:
+        rows = reader.call("res.currency.rate","search_read",dict(
+            domain=[["currency_id.name","=",currency],["company_id","in",[company_id,False]],["name","<=",end]],
+            fields=["name","inverse_rate"],order="name desc",limit=1))
+    except (PermissionError, ProviderUnavailable):
+        return None  # field absent: no localisation rate, so no Bs equivalent
+    if not rows or not rows[0].get("inverse_rate") or float(rows[0]["inverse_rate"]) <= 1:
+        return None
+    return dict(rate=str(rows[0]["inverse_rate"]),date=rows[0]["name"],currency=currency)
+
+
 def sales_report(host,account,month,view=None):
     first = date.fromisoformat(month+"-01")
     start = (first-timedelta(days=1)).replace(day=1)
@@ -221,6 +236,8 @@ def sales_report(host,account,month,view=None):
             data["company"][0]["currency"] = own[0]["currency_id"][1]
     except PermissionError:
         pass
+    if data["company"][0].get("currency"):
+        data["bolivar"] = bolivar_rate(reader,account.company_id,data["company"][0]["currency"],end.isoformat())
     if view in (None,"sales","clients"):
         finance_sales(reader,data,start.isoformat(),end.isoformat(),view is not None)
     if view in ("ar","clients"):
