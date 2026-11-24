@@ -1,8 +1,8 @@
-// Accent variants inside one warm world: only the action colour and the previous-period sand change.
+// Sober variants: neutral ground, one accent for what can be pressed, a grey that still reads for the previous period.
 const palettes = {
-  Coral:{accent:'#f25c2e',secondary:'#e8cfb6',paper:'#fbf4ec',surface:'#ffffff',nav:'#ffffff'},
-  Cobalto:{accent:'#2f5fd6',secondary:'#d3dbe8',paper:'#f5f3ef',surface:'#ffffff',nav:'#ffffff'},
-  Pino:{accent:'#1f7a55',secondary:'#cfe0d2',paper:'#f4f4ee',surface:'#ffffff',nav:'#ffffff'}
+  Pizarra:{accent:'#2f5bd3',secondary:'#878f9b',paper:'#f5f6f7',surface:'#ffffff',nav:'#ffffff'},
+  Pino:{accent:'#1f7a55',secondary:'#86908a',paper:'#f4f5f3',surface:'#ffffff',nav:'#ffffff'},
+  Coral:{accent:'#d9532b',secondary:'#948a84',paper:'#f6f5f3',surface:'#ffffff',nav:'#ffffff'}
 };
 const rgb = color => [1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
 function luminance(c){
@@ -15,14 +15,14 @@ function ratio(a,b){
 }
 function accessibleAccent(input,p){
   let color=input;
-  while(Math.min(ratio(color,p.paper),ratio(color,p.surface),ratio(color,'#ffffff'))<4.5){
+  while(Math.min(ratio(color,p.paper),ratio(color,p.surface),ratio(color,'#eeeeea'))<4.5){
     color='#'+rgb(color).map(v=>Math.floor(v*0.94).toString(16).padStart(2,'0')).join('');
   }
   return color;
 }
 export function initAppearance(profile='demo-local'){
-  const $=id=>document.getElementById(id), key='ora.appearance.v2.'+profile;
-  let choice={palette:'Coral',accent:palettes.Coral.accent};
+  const $=id=>document.getElementById(id), key='ora.appearance.v3.'+profile;
+  let choice={palette:'Pizarra',accent:palettes.Pizarra.accent};
   try{
     const saved=JSON.parse(localStorage.getItem(key));
     if(saved && Object.hasOwn(palettes,saved.palette) && /^#[0-9a-f]{6}$/i.test(saved.accent)) choice=saved;
@@ -37,11 +37,11 @@ export function initAppearance(profile='demo-local'){
   function apply(next,save=true){
     choice=next;
     const p=palettes[choice.palette],accent=accessibleAccent(choice.accent,p);
-    const fill=choice.accent,vars={plum:accent,fill,'on-fill':ratio(fill,'#ffffff')>=ratio(fill,'#2b241f')?'#ffffff':'#2b241f',paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
+    const fill=choice.accent,vars={plum:accent,fill,'on-fill':ratio(fill,'#ffffff')>=ratio(fill,'#1c1e21')?'#ffffff':'#1c1e21',paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
     for(const [k,v] of Object.entries(vars)){
       document.documentElement.style.setProperty('--'+k,v);
     }
-    try{localStorage.setItem('ora.appearance.boot2',JSON.stringify(vars))}catch{}
+    try{localStorage.setItem('ora.appearance.boot3',JSON.stringify(vars))}catch{}
     document.documentElement.dataset.palette=choice.palette;
     document.querySelectorAll('[data-palette]').forEach(b=>{
       if(b.tagName==='BUTTON') b.setAttribute('aria-pressed',b.dataset.palette===choice.palette);
@@ -55,7 +55,7 @@ export function initAppearance(profile='demo-local'){
   $('closeAppearance').onclick=()=>$('appearance').close();
   $('appearance').addEventListener('close',()=>$('accountMenu').querySelector('summary').focus());
   $('accent').oninput=e=>apply({...choice,accent:e.target.value});
-  $('resetTheme').onclick=()=>apply({palette:'Coral',accent:palettes.Coral.accent});
+  $('resetTheme').onclick=()=>apply({palette:'Pizarra',accent:palettes.Pizarra.accent});
   apply(choice,false);
 }
 /* Freeze the resolved appearance at download time for both file formats. */
