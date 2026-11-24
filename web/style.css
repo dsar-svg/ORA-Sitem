@@ -733,3 +733,50 @@ body[data-section=ora] .page{display:none}
   #oraView{height:calc(100dvh - 162px)}
   #oraReset{padding:7px 12px;font-size:14px}
 }
+
+/* ===== Identidad Ora · Medianoche: interfaz oscura y elegante alrededor del búho; dorado solo en lo que se presiona ===== */
+:root{color-scheme:dark;--paper:#0f1220;--white:#171b2c;--nav:#12162a;--on-nav:#e9ebf2;--ink:#e9ebf2;--muted:#a2a8ba;--line:#272c43;--tint:#1e2338;
+  --data:#d9dce6;--peach:#6b7391;--data-prev:var(--peach);--plum:#f0c97a;--fill:#e3b766;--on-fill:#141a2e;--warn:#f0a35e;--good:#4fc08d;--bad:#ff8a80;
+  --nav-active:rgb(227 183 102/.14);--ora:#e3b766}
+body,aside,#sidebar{background:var(--paper)}
+aside{background:var(--nav);border-color:var(--line)}
+::selection{background:rgb(227 183 102/.35);color:var(--ink)}
+:is(button,select,summary,input,a,[tabindex]):focus-visible{outline:2px solid var(--plum)}
+.filters label:has(:focus-visible){outline-color:var(--plum)}
+td{border-bottom-color:var(--line)}
+html{scrollbar-color:#3a4160 transparent}
+.ora-face{border-radius:50%;object-fit:cover;background:#16181d;box-shadow:0 0 0 1px rgb(227 183 102/.35);flex:none}
+.ora-face.thinking{animation:ora-breathe 1.8s ease-in-out infinite}
+@keyframes ora-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.ora-empty .ora-face{box-shadow:0 0 0 2px rgb(227 183 102/.5),0 20px 60px -20px rgb(227 183 102/.45)}
+@media (prefers-reduced-motion:reduce){.ora-face{animation:none!important}}
+.ora-mark{border-radius:10px;flex:none}
+.brand{color:var(--ink)}
+nav button{color:var(--muted)}nav button:hover{background:var(--tint);color:var(--ink)}
+nav button.active{background:var(--nav-active);color:var(--plum)}
+.kpi.primary,.sales-summary .primary{background:linear-gradient(160deg,#1d2338,#171b2c 60%);border-color:#33395a}
+.kpi .source:before{background:var(--good)}
+.ora-row.failed .agent-msg,.agent-msg.failed,.sync.failed{color:var(--bad)}.sync.failed:before{background:var(--bad)}
+.sync.stale{color:var(--warn)}
+.ora-row.user .agent-msg{background:#262c47;color:var(--ink)}
+.ora-topics button:hover{border-color:var(--fill);background:#1b2034}
+.ora-says{background:linear-gradient(90deg,rgb(227 183 102/.08),var(--white) 40%)}
+/* Map: data ramp toward the surface instead of toward white */
+.map,.venezuela{background:#141829}.land{fill:var(--white);stroke:#3a4160}
+.geo-panel [data-level="0"]{--fill:#1c2133}
+.geo-panel [data-level="1"]{--fill:var(--fill);--label:#141a2e}
+.geo-panel [data-level="2"]{--fill:color-mix(in srgb,var(--fill) 70%,var(--white));--label:#141a2e}
+.geo-panel [data-level="3"]{--fill:color-mix(in srgb,var(--fill) 42%,var(--white));--label:var(--ink)}
+.geo-panel [data-level="4"]{--fill:color-mix(in srgb,var(--fill) 20%,var(--white));--label:var(--ink)}
+/* Login */
+.login-identity{background:linear-gradient(160deg,#1a2036,#0f1220);color:var(--ink)}
+.login-identity .brand{color:var(--ink)}
+.login-sheet input{background:var(--paper);color:var(--ink);border-color:var(--line)}
+input,select,textarea{color:var(--ink)}
+.choices,.profile-menu,.export-menu>div,dialog{background:var(--white);color:var(--ink);border-color:var(--line)}
+.dialog-head button,#navOpen,#navClose{background:var(--tint);color:var(--ink)}
+.track{background:#262c43}
+.comparison,.trend .comparison,.detailsum{background:var(--tint);color:var(--ink)}
+body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--muted)}
+.login-identity p strong{color:var(--plum)}
+.login-ora{display:block;width:min(220px,55%);height:auto;aspect-ratio:1;margin:auto;border-radius:50%;box-shadow:0 0 0 2px rgb(227 183 102/.45),0 30px 80px -30px rgb(227 183 102/.5)}

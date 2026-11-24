@@ -57,9 +57,10 @@ LOGIN_MESSAGES = {
     "conexion": "Odoo no pudo validar el acceso. Inténtalo de nuevo más tarde.",
 }
 ASSETS["/login.js"] = ("login.js","text/javascript")
-for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json")):
+for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json"),
+                   *((f"ora/{n}.webp","image/webp") for n in ("ora","ora-128","ora-pensando","ora-pensando-128"))):
     ASSETS["/" + name] = (name, mime)
-PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest")
+PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest","/ora/ora.webp")
 LOG = logging.getLogger("ora")
 AGENT_PLANS = {"intermedio","avanzado"}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
