@@ -11,10 +11,10 @@ from urllib.parse import urlsplit, parse_qs
 from erp_auth import configured_provider, Sessions, LoginDenied, AdditionalVerification, ProviderUnavailable
 from access import roster, identity, basic_scope
 from demo import Demo
-from odoo_sales import CARACAS, sales_report
+from odoo_sales import CARACAS, Reader, sales_report
 from datetime import date, datetime
 from model import SCHEMA, read_model, sync
-from agent import Book, AgentUnavailable, ask
+from agent import ATTACHMENT_TYPES, Book, AgentUnavailable, ask
 import calendar
 
 ROOT = Path(__file__).resolve().parent
@@ -149,11 +149,14 @@ class Handler(BaseHTTPRequestHandler):
             return answer(429, "Hiciste muchas preguntas seguidas. Espera unos minutos.")
         try:
             size = int(self.headers.get("Content-Length","0"))
-            if self.headers.get_content_type()!="application/json" or not 0<size<=65536:
+            if self.headers.get_content_type()!="application/json" or not 0<size<=8_000_000:
                 raise ValueError()
             body = json.loads(self.rfile.read(size))
             question, month = body["question"].strip(), body["month"]
             history = [{"role":m["role"],"content":m["content"]} for m in body.get("history",[])][-12:]
+            files = [{"name":str(f["name"])[:120],"type":f["type"],"data":f["data"]} for f in body.get("files",[])]
+            if len(files)>3 or any(f["type"] not in ATTACHMENT_TYPES or not isinstance(f["data"],str) for f in files)                     or sum(len(f["data"]) for f in files)>7_000_000:
+                raise ValueError()
             if (not 0<len(question)<=2000 or not isinstance(month,str) or not self.report_month(month)
                     or any(m["role"] not in ("user","assistant") or not isinstance(m["content"],str) or len(m["content"])>6000 for m in history)):
                 raise ValueError()
@@ -174,11 +177,14 @@ class Handler(BaseHTTPRequestHandler):
             year, number = map(int, month.split("-"))
             data["cutoff"] = f"{month}-{calendar.monthrange(year,number)[1]:02d}"
         try:
-            text, documents, tools, usage = ask(Book(data), question, history, datetime.now(CARACAS).date().isoformat(), month)
+            book = Book(data, Reader(ERP.host, account) if SALES_MONTH else None)
+            text, documents, tools, usage = ask(book, question, history, datetime.now(CARACAS).date().isoformat(), month, attachments=files)
         except AgentUnavailable as error:
             return answer(503, str(error))
+        except LoginDenied:
+            return answer(401, "Tu sesión de Odoo terminó. Vuelve a iniciar sesión.")
         LOG.info("Agente · %s · mes %s · herramientas %s · tokens %s", user, month, ",".join(tools) or "-", usage)
-        self.reply(200, json.dumps({"answer":text,"documents":documents}, ensure_ascii=False).encode(), "application/json")
+        self.reply(200, json.dumps({"answer":text,"documents":documents,"files":book.files}, ensure_ascii=False).encode(), "application/json")
 
     def post(self):
         if self.path=="/api/agent":
