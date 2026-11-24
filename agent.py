@@ -9,8 +9,8 @@ import os
 from datetime import date
 
 LOG = logging.getLogger("ora.agent")
-MODEL = os.getenv("ORA_AI_MODEL", "claude-opus-5-5")
-EFFORT = os.getenv("ORA_AI_EFFORT", "medium")
+MODEL = os.getenv("ORA_AI_MODEL", "gpt-5-mini")
+EFFORT = os.getenv("ORA_AI_EFFORT", "medium")  # reasoning effort: minimal, low, medium, high
 MAX_TURNS = 8
 MAX_DOCS = 40  # documents returned per tool call; totals always cover every matching document
 
@@ -176,7 +176,9 @@ TOOLS = [
          "tipo": {"type": "string", "enum": ["", "factura", "nota_de_credito"]},
          "limite": {"type": "integer", "description": "1–40."}}}},
 ]
-WEB = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
+# OpenAI Responses API shapes: function tools plus the hosted web search.
+FUNCTIONS = [{"type": "function", "name": t["name"], "description": t["description"], "parameters": t["input_schema"], "strict": True} for t in TOOLS]
+WEB = {"type": "web_search"}
 
 SYSTEM = """Eres el analista de ORA para la gerencia de una empresa distribuidora. Respondes en español claro, como un gerente de finanzas hablando con el dueño.
 
@@ -191,47 +193,46 @@ Reglas:
 
 
 def ask(book, question, history, today, period, web=True):
-    """Runs the tool loop and returns the answer text, the documents cited and usage for logging."""
-    if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("ANTHROPIC_AUTH_TOKEN"):
+    """Runs the tool loop and returns the answer text, the documents cited, the tools used and token usage."""
+    if not os.getenv("OPENAI_API_KEY"):
         raise AgentUnavailable("El agente no está configurado en este servidor.")
-    import anthropic  # loaded on use so ORA still starts without the agent's dependency
-    client = anthropic.Anthropic(timeout=90, max_retries=2)
+    import openai  # loaded on use so ORA still starts without the agent's dependency
+    client = openai.OpenAI(timeout=90, max_retries=2)
     context = f"Hoy es {today}. El usuario está viendo el período {period}. Moneda de la empresa: {book.currency}."
     if book.excluded:
         context += f" Las ventas excluyen empresas del mismo grupo: {', '.join(book.excluded)}."
-    messages = [*history, {"role": "user", "content": question}, {"role": "system", "content": context}]
-    tools = [*TOOLS, WEB] if web else TOOLS
+    items = [{"role": "developer", "content": context}, *history, {"role": "user", "content": question}]
+    tools = [*FUNCTIONS, WEB] if web else FUNCTIONS
     used, usage = [], {"input": 0, "output": 0}
     for _ in range(MAX_TURNS):
         try:
-            response = client.beta.messages.create(
-                model=MODEL, max_tokens=8000, system=SYSTEM, tools=tools, messages=messages,
-                output_config={"effort": EFFORT}, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-        except anthropic.RateLimitError as error:
+            # store=False keeps company data out of OpenAI's stored conversations; reasoning travels encrypted instead.
+            response = client.responses.create(
+                model=MODEL, instructions=SYSTEM, input=items, tools=tools, reasoning={"effort": EFFORT},
+                max_output_tokens=8000, store=False, include=["reasoning.encrypted_content"])
+        except openai.RateLimitError as error:
             raise AgentUnavailable("El agente está muy solicitado. Intenta de nuevo en un minuto.") from error
-        except (anthropic.APIConnectionError, anthropic.APIStatusError) as error:
+        except (openai.APIConnectionError, openai.APIStatusError) as error:
             LOG.warning("Fallo del modelo · %r", error)
             raise AgentUnavailable("El agente no está disponible en este momento.") from error
-        usage["input"] += response.usage.input_tokens
-        usage["output"] += response.usage.output_tokens
-        if response.stop_reason == "refusal":
+        if response.usage:
+            usage["input"] += response.usage.input_tokens
+            usage["output"] += response.usage.output_tokens
+        reason = getattr(response.incomplete_details, "reason", None)
+        if reason == "content_filter":
             return "No puedo ayudar con esa solicitud.", [], used, usage
-        messages.append({"role": "assistant", "content": response.content})
-        if response.stop_reason == "pause_turn":
-            continue
-        calls = [b for b in response.content if b.type == "tool_use"]
-        if response.stop_reason != "tool_use" or not calls:
-            text = "\n".join(b.text for b in response.content if b.type == "text").strip()
-            if response.stop_reason == "max_tokens":
+        items += [item.model_dump(exclude_none=True) for item in response.output]
+        calls = [item for item in response.output if item.type == "function_call"]
+        if not calls:
+            text = (response.output_text or "").strip()
+            if reason == "max_output_tokens":
                 text += "\n\n(La respuesta se cortó por largo. Pide un resumen más corto.)"
             return text, list(book.cited.values()), used, usage
-        results = []
         for call in calls:
             used.append(call.name)
             try:
-                content, failed = json.dumps(book.run(call.name, dict(call.input)), ensure_ascii=False), False
+                output = json.dumps(book.run(call.name, json.loads(call.arguments)), ensure_ascii=False)
             except (TypeError, ValueError, KeyError) as error:
-                content, failed = f"No se pudo ejecutar la consulta: {error}", True
-            results.append({"type": "tool_result", "tool_use_id": call.id, "content": content, "is_error": failed})
-        messages.append({"role": "user", "content": results})
+                output = f"No se pudo ejecutar la consulta: {error}"
+            items.append({"type": "function_call_output", "call_id": call.call_id, "output": output})
     return "La consulta necesitó demasiados pasos. Prueba con una pregunta más concreta.", list(book.cited.values()), used, usage

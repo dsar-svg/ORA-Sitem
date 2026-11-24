@@ -34,12 +34,20 @@ class AgentTests(unittest.TestCase):
 
     def test_loop_runs_tools_and_returns_cited_documents(self):
         book = demo_book()
-        use = NS(type="tool_use", id="t1", name="ventas", input={"mes": "2026-10", "agrupar_por": "total", "filtro": "", "limite": 5})
-        replies = [NS(stop_reason="tool_use", content=[use], usage=NS(input_tokens=10, output_tokens=5)),
-                   NS(stop_reason="end_turn", content=[NS(type="text", text="Vendiste USD 8.056,00.")], usage=NS(input_tokens=20, output_tokens=8))]
-        client = NS(beta=NS(messages=NS(create=lambda **kw: replies.pop(0))))
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), patch("anthropic.Anthropic", return_value=client):
+        call = NS(type="function_call", call_id="c1", name="ventas",
+                  arguments='{"mes": "2026-10", "agrupar_por": "total", "filtro": "", "limite": 5}',
+                  model_dump=lambda **kw: {"type": "function_call", "call_id": "c1"})
+        answer = NS(type="message", model_dump=lambda **kw: {"type": "message"})
+        replies = [NS(output=[call], output_text="", incomplete_details=None, usage=NS(input_tokens=10, output_tokens=5)),
+                   NS(output=[answer], output_text="Vendiste USD 8.056,00.", incomplete_details=None, usage=NS(input_tokens=20, output_tokens=8))]
+        sent = []
+        client = NS(responses=NS(create=lambda **kw: sent.append(kw) or replies.pop(0)))
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test"}), patch("openai.OpenAI", return_value=client):
             text, docs, tools, usage = agent.ask(book, "¿Cuánto vendí?", [], "2026-11-24", "2026-10", web=False)
+        self.assertFalse(sent[0]["store"])
+        outputs = [i for i in sent[1]["input"] if i.get("type") == "function_call_output"]
+        self.assertEqual((len(outputs), outputs[0]["call_id"]), (1, "c1"))
+        self.assertIn("USD 8.056,00", outputs[0]["output"])
         self.assertEqual((text, tools, usage), ("Vendiste USD 8.056,00.", ["ventas"], {"input": 30, "output": 13}))
         self.assertTrue(docs and all("numero" in d for d in docs))
 

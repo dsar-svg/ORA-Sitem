@@ -62,7 +62,7 @@ for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","applica
 PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest")
 LOG = logging.getLogger("ora")
 AGENT_PLANS = {"intermedio","avanzado"}
-AGENT_READY = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
 # Inline style attributes carry bar widths and theme tokens; scripts stay same-origin only.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
        "font-src 'self'; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
