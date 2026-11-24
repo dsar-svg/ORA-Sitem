@@ -1,5 +1,2 @@
-// Runs before first paint: reapplies the last resolved palette so page reloads don't flash the default theme.
-try{
-  const vars=JSON.parse(localStorage.getItem('ora.appearance.boot5'))||{};
-  for(const [k,v] of Object.entries(vars))if(/^#[0-9a-f]{6}$/i.test(v))document.documentElement.style.setProperty('--'+k,v);
-}catch{}
+// Runs before first paint: restores the chosen light/dark mode so reloads don't flash the other one.
+try{const m=localStorage.getItem('ora.mode');document.documentElement.dataset.mode=['light','dark'].includes(m)?m:'auto';}catch{document.documentElement.dataset.mode='auto';}

@@ -734,49 +734,92 @@ body[data-section=ora] .page{display:none}
   #oraReset{padding:7px 12px;font-size:14px}
 }
 
-/* ===== Identidad Ora · Medianoche: interfaz oscura y elegante alrededor del búho; dorado solo en lo que se presiona ===== */
-:root{color-scheme:dark;--paper:#0f1220;--white:#171b2c;--nav:#12162a;--on-nav:#e9ebf2;--ink:#e9ebf2;--muted:#a2a8ba;--line:#272c43;--tint:#1e2338;
-  --data:#d9dce6;--peach:#6b7391;--data-prev:var(--peach);--plum:#f0c97a;--fill:#e3b766;--on-fill:#141a2e;--warn:#f0a35e;--good:#4fc08d;--bad:#ff8a80;
-  --nav-active:rgb(227 183 102/.14);--ora:#e3b766}
-body,aside,#sidebar{background:var(--paper)}
-aside{background:var(--nav);border-color:var(--line)}
-::selection{background:rgb(227 183 102/.35);color:var(--ink)}
-:is(button,select,summary,input,a,[tabindex]):focus-visible{outline:2px solid var(--plum)}
-.filters label:has(:focus-visible){outline-color:var(--plum)}
+body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--muted)}
+
+/* ===== Identidad Ora · Índigo: claro y luminoso con barra lateral índigo; modo oscuro equivalente ===== */
+:root{color-scheme:light;--paper:#f6f8fb;--white:#ffffff;--ink:#1a1f36;--muted:#5b6478;--line:#e3e8ef;--tint:#eef2f7;
+  --data:#635bff;--peach:#c4cad6;--data-prev:var(--peach);--plum:#4b43e0;--fill:#635bff;--on-fill:#ffffff;--warn:#c2410c;--good:#0e8a5f;--bad:#c0262d;
+  --nav-active:rgb(255 255 255/.14);--side:#1c1b4b;--side-2:#2a2470;--side-ink:#d9daf5;--side-muted:#a5a7d6;
+  --card-shadow:0 0 0 1px rgb(26 31 54/.05),0 1px 2px rgb(26 31 54/.06),0 10px 28px -14px rgb(50 50 93/.22);
+  --hero:linear-gradient(135deg,#635bff 0%,#4b43e0 55%,#2e2a8c 100%)}
+:root[data-mode=dark]{color-scheme:dark;--paper:#0b0d12;--white:#12151c;--ink:#e7e9ef;--muted:#9097a8;--line:#222736;--tint:#1a1e28;
+  --data:#8b97ff;--peach:#3b4157;--plum:#a5b0ff;--fill:#6e7cff;--on-fill:#ffffff;--warn:#f5a35c;--good:#4ccb8f;--bad:#ff8a80;
+  --side:#0e1016;--side-2:#151832;--side-ink:#e7e9ef;--side-muted:#9097a8;
+  --card-shadow:0 0 0 1px rgb(255 255 255/.06),0 12px 30px -16px rgb(0 0 0/.7);--hero:linear-gradient(135deg,#4e4ad6 0%,#2f2b9a 60%,#1b1958 100%)}
+@media (prefers-color-scheme:dark){:root[data-mode=auto]{color-scheme:dark;--paper:#0b0d12;--white:#12151c;--ink:#e7e9ef;--muted:#9097a8;--line:#222736;--tint:#1a1e28;
+  --data:#8b97ff;--peach:#3b4157;--plum:#a5b0ff;--fill:#6e7cff;--on-fill:#ffffff;--warn:#f5a35c;--good:#4ccb8f;--bad:#ff8a80;
+  --side:#0e1016;--side-2:#151832;--side-ink:#e7e9ef;--side-muted:#9097a8;
+  --card-shadow:0 0 0 1px rgb(255 255 255/.06),0 12px 30px -16px rgb(0 0 0/.7);--hero:linear-gradient(135deg,#4e4ad6 0%,#2f2b9a 60%,#1b1958 100%)}}
+body{background:var(--paper)}
+::selection{background:color-mix(in srgb,var(--fill) 28%,transparent);color:var(--ink)}
+:is(button,select,summary,input,a,[tabindex]):focus-visible{outline:2px solid var(--fill);outline-offset:2px}
 td{border-bottom-color:var(--line)}
-html{scrollbar-color:#3a4160 transparent}
-.ora-face{border-radius:50%;object-fit:cover;background:#16181d;box-shadow:0 0 0 1px rgb(227 183 102/.35);flex:none}
+/* Sidebar in brand indigo */
+aside,#sidebar{background:linear-gradient(180deg,var(--side) 0%,var(--side-2) 100%);border-right:0;color:var(--side-ink)}
+.brand{color:#fff}
+#sidebar nav button{color:var(--side-muted)}
+#sidebar nav button:hover{background:rgb(255 255 255/.07);color:#fff}
+#sidebar nav button.active{background:var(--nav-active);color:#fff;box-shadow:inset 3px 0 0 #a5a0ff}
+body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--side-muted);box-shadow:none}
+#accountMenu summary{background:rgb(255 255 255/.08);color:#fff}#accountMenu summary i{color:var(--side-muted)}
+.profile-menu{background:var(--white);color:var(--ink)}
+/* Cards: soft elevation instead of outlines */
+.panel,.trend,.directory-card,.profile-section,.kpis .kpi,.support .kpi,#dashboard>.panel,.ranking-pair .panel,.geo-panel,.client-list,.statement-breakdown,
+.kpis .kpi:not(.primary),#dashboard[data-module=inventory] .panels .panel:nth-child(2),#dashboard[data-module=ar] .panels .panel,#dashboard[data-module=inventory] .panels .panel,
+.ora-says,.ora-head-bar,.ora-topics button,#oraView #agentForm,.ora-row.assistant .agent-msg,.load-error{border:0;border-radius:14px;box-shadow:var(--card-shadow);background:var(--white)}
+.trend .panel{box-shadow:none;border-radius:0}
+.kpi:hover,.directory-card:hover{box-shadow:var(--card-shadow),0 0 0 1px color-mix(in srgb,var(--fill) 35%,transparent)}
+.panel h2,.directory-title{font-size:17px;font-weight:650;letter-spacing:-.01em}
+.icon-box{background:color-mix(in srgb,var(--fill) 12%,var(--white));color:var(--plum);border-radius:10px}
+.kpi-name{color:var(--muted);font-size:13.5px;font-weight:600}
+/* Headline card in the brand gradient */
+.kpi.primary,.sales-summary .primary{background:var(--hero);color:#fff;border:0;box-shadow:0 18px 40px -20px rgb(75 67 224/.7)}
+.kpi.primary .kpi-name,.kpi.primary .sub,.primary .sub,.kpi.primary .source,.kpi.primary .bs{color:rgb(255 255 255/.82)}
+.kpi.primary strong,.kpi.primary .recon{color:#fff}.kpi.primary .recon{border-top-color:rgb(255 255 255/.2)}
+.kpi.primary .alert{color:#ffd29c}
+.primary .icon-box{background:rgb(255 255 255/.16);color:#fff}
+.primary .cta{background:#fff;color:#2e2a8c}.primary .cta:hover{background:#eef0ff}
+.kpi .source:before{background:#4ade9b}
+/* Buttons and controls */
+.filters label,.filters>label,#secondaryFilters label,#filterToggle,.export-menu summary,.secondary{background:var(--white);border:1px solid var(--line);box-shadow:0 1px 2px rgb(26 31 54/.05)}
+.report-tabs,.client-tabs{background:var(--tint)}
+.report-tabs button[aria-pressed=true],.client-tabs [aria-selected=true]{background:var(--white);color:var(--plum)}
+.chart g:hover rect,.chart g:focus-visible rect{fill:var(--plum)}
+.track{background:var(--tint)}.track i{background:var(--data)}
+.hrow.priority .track i{background:var(--warn)}
+.ora-row.failed .agent-msg,.agent-msg.failed,.sync.failed{color:var(--bad)}
+.ora-row.user .agent-msg{background:color-mix(in srgb,var(--fill) 14%,var(--white));color:var(--ink)}
+.ora-face{border-radius:50%;object-fit:cover;background:#16181d;flex:none}
 .ora-face.thinking{animation:ora-breathe 1.8s ease-in-out infinite}
 @keyframes ora-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
-.ora-empty .ora-face{box-shadow:0 0 0 2px rgb(227 183 102/.5),0 20px 60px -20px rgb(227 183 102/.45)}
+.ora-empty .ora-face{box-shadow:0 0 0 3px color-mix(in srgb,var(--fill) 35%,transparent),0 24px 60px -24px rgb(75 67 224/.55)}
 @media (prefers-reduced-motion:reduce){.ora-face{animation:none!important}}
 .ora-mark{border-radius:10px;flex:none}
-.brand{color:var(--ink)}
-nav button{color:var(--muted)}nav button:hover{background:var(--tint);color:var(--ink)}
-nav button.active{background:var(--nav-active);color:var(--plum)}
-.kpi.primary,.sales-summary .primary{background:linear-gradient(160deg,#1d2338,#171b2c 60%);border-color:#33395a}
-.kpi .source:before{background:var(--good)}
-.ora-row.failed .agent-msg,.agent-msg.failed,.sync.failed{color:var(--bad)}.sync.failed:before{background:var(--bad)}
-.sync.stale{color:var(--warn)}
-.ora-row.user .agent-msg{background:#262c47;color:var(--ink)}
-.ora-topics button:hover{border-color:var(--fill);background:#1b2034}
-.ora-says{background:linear-gradient(90deg,rgb(227 183 102/.08),var(--white) 40%)}
-/* Map: data ramp toward the surface instead of toward white */
-.map,.venezuela{background:#141829}.land{fill:var(--white);stroke:#3a4160}
-.geo-panel [data-level="0"]{--fill:#1c2133}
-.geo-panel [data-level="1"]{--fill:var(--fill);--label:#141a2e}
-.geo-panel [data-level="2"]{--fill:color-mix(in srgb,var(--fill) 70%,var(--white));--label:#141a2e}
-.geo-panel [data-level="3"]{--fill:color-mix(in srgb,var(--fill) 42%,var(--white));--label:var(--ink)}
-.geo-panel [data-level="4"]{--fill:color-mix(in srgb,var(--fill) 20%,var(--white));--label:var(--ink)}
-/* Login */
-.login-identity{background:linear-gradient(160deg,#1a2036,#0f1220);color:var(--ink)}
-.login-identity .brand{color:var(--ink)}
-.login-sheet input{background:var(--paper);color:var(--ink);border-color:var(--line)}
-input,select,textarea{color:var(--ink)}
-.choices,.profile-menu,.export-menu>div,dialog{background:var(--white);color:var(--ink);border-color:var(--line)}
+.ora-says{background:linear-gradient(90deg,color-mix(in srgb,var(--fill) 9%,var(--white)),var(--white) 45%)}
+#oraView #agentForm:focus-within{box-shadow:var(--card-shadow),0 0 0 2px var(--fill)}
+/* Map ramp from the brand indigo */
+.map,.venezuela{background:var(--tint)}.land{fill:var(--white);stroke:color-mix(in srgb,var(--muted) 40%,transparent)}
+.geo-panel [data-level="0"]{--fill:var(--tint)}
+.geo-panel [data-level="1"]{--fill:var(--data);--label:#fff}
+.geo-panel [data-level="2"]{--fill:color-mix(in srgb,var(--data) 70%,var(--white));--label:#fff}
+.geo-panel [data-level="3"]{--fill:color-mix(in srgb,var(--data) 42%,var(--white));--label:var(--ink)}
+.geo-panel [data-level="4"]{--fill:color-mix(in srgb,var(--data) 20%,var(--white));--label:var(--ink)}
+/* Dialogs and menus follow the mode */
+.choices,.profile-menu,.export-menu>div,dialog{background:var(--white);color:var(--ink);border:1px solid var(--line)}
 .dialog-head button,#navOpen,#navClose{background:var(--tint);color:var(--ink)}
-.track{background:#262c43}
 .comparison,.trend .comparison,.detailsum{background:var(--tint);color:var(--ink)}
-body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--muted)}
-.login-identity p strong{color:var(--plum)}
-.login-ora{display:block;width:min(220px,55%);height:auto;aspect-ratio:1;margin:auto;border-radius:50%;box-shadow:0 0 0 2px rgb(227 183 102/.45),0 30px 80px -30px rgb(227 183 102/.5)}
+input,select,textarea{color:var(--ink)}
+#palettes{display:flex;gap:10px;flex-wrap:wrap}
+#palettes button{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--white);border-radius:10px;padding:10px 14px;font-weight:600}
+#palettes [aria-pressed=true]{outline:2px solid var(--fill);outline-offset:2px}
+.mode-swatch{width:22px;height:22px;border-radius:6px;border:1px solid var(--line)}
+.mode-light{background:#f6f8fb}.mode-dark{background:#12151c}.mode-auto{background:linear-gradient(135deg,#f6f8fb 50%,#12151c 50%)}
+/* Login */
+.login-page{background:var(--paper)}
+.login-layout{border:0;box-shadow:var(--card-shadow);background:var(--white)}
+.login-identity{background:linear-gradient(160deg,var(--side),var(--side-2));color:#fff}
+.login-identity .brand{color:#fff}.login-identity p strong{color:#c7c3ff}
+.login-sheet input{background:var(--white);color:var(--ink);border-color:var(--line)}
+.login-submit{background:var(--fill);color:var(--on-fill)}
+.login-ora{display:block;width:min(220px,55%);height:auto;aspect-ratio:1;margin:auto;border-radius:50%;box-shadow:0 0 0 3px rgb(165 160 255/.45),0 30px 80px -30px rgb(99 91 255/.6)}
+@media(max-width:800px){aside,#sidebar{background:var(--side);box-shadow:0 -8px 24px -12px rgb(26 31 54/.4)}}
