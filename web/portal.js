@@ -6,6 +6,7 @@ import {enhanceFilters,setupNavigation} from './filters.js';
 import {customers} from './customers.js';
 import {renderInventory} from './inventory.js';
 import {initAppearance} from './theme.js';
+import {face} from './ora.js';
 import {prepare,sales,balances,sum,groups,overdue} from './metrics.js';
 
 const $ = id => document.getElementById(id);
@@ -24,6 +25,7 @@ const icons = {
 };
 const icon = k => '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="'+icons[k]+'"/></svg>';
 document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=icon(e.dataset.icon));
+document.addEventListener('ora:icons',e=>e.detail.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon)));
 const decimal = new Intl.NumberFormat('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const money = cents => $('currency').value+'\u00a0'+(cents<0?'−':'')+decimal.format(Math.abs(cents)/100);
 // Compact axis labels (1,5 M · 771 mil) fit the 45-unit gutter at any scale.
@@ -225,7 +227,7 @@ function render(){
     $('dashboard').innerHTML=renderInventory(data,{period,end:lastDay(),warehouse:$('warehouse').value,category:$('category').value,product:$('stockProduct').value},{esc,action,panel,show:showDetail,refresh:render,day});
     return;
   }
-  let cards,panels,table,hero,evolution;
+  let cards,panels,table,hero,evolution,says='';
   if(isSales){
     const d=monthDate(period);d.setUTCMonth(d.getUTCMonth()-1);
     const prev=d.toISOString().slice(0,7),prod=$('product').value;
@@ -256,6 +258,7 @@ function render(){
     const invoices=current.filter(d=>d.sign===1), credits=current.filter(d=>d.sign===-1),net=sum(current);
     const previous=sum(prior),growth=previous>0?(net-previous)/previous*100:null;
     const recon=invoices.length+(invoices.length===1?' factura ':' facturas ')+money(sum(invoices))+(credits.length?' − '+credits.length+(credits.length===1?' nota de crédito ':' notas de crédito ')+money(-sum(credits)):'')+' = '+money(net)+' sin impuestos';
+    says=growth===null?'Este mes llevas '+money(net)+' en ventas netas.':'Este mes llevas '+money(net)+' en ventas netas, '+pct(Math.abs(growth))+(growth>=0?' más':' menos')+' que '+monthName(prev)+'.';
     hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),'chart',current,true,
       '<span class="recon">'+esc(recon)+'</span>'+provenance(net));
     cards=kpi('Facturas emitidas',String(invoices.length),money(sum(invoices))+' sin impuestos','invoice',invoices)+
@@ -291,6 +294,8 @@ function render(){
     const bands=buckets.map(k=>rows.filter(d=>d.bucket===k)),max=Math.max(1,...bands.map(x=>Math.abs(sum(x))));
     panels=panel('Antigüedad de saldos','Saldo por vencimiento al '+day(lastDay())+' · Selecciona un tramo para revisar sus facturas.',bands.map((b,i)=>horizontal(buckets[i],money(sum(b)),sum(b),max,drill(buckets[i],b),i===4)).join(''));
     const byClient=groups(rows,'customer').map(g=>({...g,name:g.docs[0].client}));
+    const worst=groups(late,'customer').filter(g=>g.value>0)[0];
+    says=late.length?'Tienes '+money(sum(late))+' vencido'+(worst?'; '+worst.docs[0].client+' es quien más debe, con '+money(worst.value)+'.':'.'):'No tienes saldos vencidos al '+day(lastDay())+'.';
     const debtors=top(groups(late,'customer').map(g=>({...g,name:g.docs[0].client})).filter(g=>g.value>0),5),most=Math.max(1,...debtors.map(g=>g.value));
     panels+=panel('Mayores deudores','Saldo vencido al '+day(lastDay())+' · cinco principales',debtors.map(g=>horizontal(g.name,money(g.value)+' · '+new Set(g.docs.map(d=>d.id)).size+' doc.',g.value,most,drill(g.name,g.docs))).join('')||'<p class="empty">Sin saldos vencidos. Todo al día.</p>');
     table=breakdown('Cartera por cliente','Cliente',byClient,sum(rows));
@@ -298,11 +303,13 @@ function render(){
     viewReport.summary.push(['Saldo vencido',sum(late)],['Por vencer',sum(upcoming)],...(unapplied.length?[['Pagos sin aplicar',sum(unapplied)]]:[]));
     viewReport.charts=[barChart('Antigüedad de saldos',buckets.map((name,i)=>({name,value:sum(bands[i])}))),barChart('Cartera por cliente (principales 15)',top(byClient))];
   }
+  // Ora's one-line reading of the section; links to her page when the plan includes her.
+  const oraLine='<p class="ora-says">'+face(30)+'<span>'+esc(says)+'</span>'+(document.querySelector('[data-section=ora]:not([hidden])')?'<button type="button" class="link" data-ask-ora>Pregúntale a Ora</button>':'')+'</p>';
   if(isSales){
-    $('dashboard').innerHTML='<div class="sales-overview"><div class="sales-summary">'+hero+'<div class="support">'+cards+'</div></div><div class="trend">'+evolution+'</div></div><div class="ranking-pair">'+panels+'</div>'+table;
+    $('dashboard').innerHTML=oraLine+'<div class="sales-overview"><div class="sales-summary">'+hero+'<div class="support">'+cards+'</div></div><div class="trend">'+evolution+'</div></div><div class="ranking-pair">'+panels+'</div>'+table;
     return;
   }
-  $('dashboard').innerHTML='<div class="kpis">'+cards+'</div><div class="panels">'+panels+'</div>'+table;
+  $('dashboard').innerHTML=oraLine+'<div class="kpis">'+cards+'</div><div class="panels">'+panels+'</div>'+table;
 }
 $('filterToggle').onclick=()=>{
   const open=$('filterToggle').getAttribute('aria-expanded')!=='true';

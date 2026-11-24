@@ -1,5 +1,6 @@
 // Sober variants: neutral ground, one accent for what can be pressed, a grey that still reads for the previous period.
 const palettes = {
+  Mango:{accent:'#f07a1a',secondary:'#8f857c',paper:'#fbf8f4',surface:'#ffffff',nav:'#ffffff'},
   Pizarra:{accent:'#2f5bd3',secondary:'#878f9b',paper:'#f5f6f7',surface:'#ffffff',nav:'#ffffff'},
   Pino:{accent:'#1f7a55',secondary:'#86908a',paper:'#f4f5f3',surface:'#ffffff',nav:'#ffffff'},
   Coral:{accent:'#d9532b',secondary:'#948a84',paper:'#f6f5f3',surface:'#ffffff',nav:'#ffffff'}
@@ -21,8 +22,8 @@ function accessibleAccent(input,p){
   return color;
 }
 export function initAppearance(profile='demo-local'){
-  const $=id=>document.getElementById(id), key='ora.appearance.v3.'+profile;
-  let choice={palette:'Pizarra',accent:palettes.Pizarra.accent};
+  const $=id=>document.getElementById(id), key='ora.appearance.v4.'+profile;
+  let choice={palette:'Mango',accent:palettes.Mango.accent};
   try{
     const saved=JSON.parse(localStorage.getItem(key));
     if(saved && Object.hasOwn(palettes,saved.palette) && /^#[0-9a-f]{6}$/i.test(saved.accent)) choice=saved;
@@ -37,11 +38,11 @@ export function initAppearance(profile='demo-local'){
   function apply(next,save=true){
     choice=next;
     const p=palettes[choice.palette],accent=accessibleAccent(choice.accent,p);
-    const fill=choice.accent,vars={plum:accent,fill,'on-fill':ratio(fill,'#ffffff')>=ratio(fill,'#1c1e21')?'#ffffff':'#1c1e21',paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
+    const fill=choice.accent,vars={plum:accent,fill,'on-fill':ratio(fill,'#ffffff')>=ratio(fill,'#221e2b')?'#ffffff':'#221e2b',paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
     for(const [k,v] of Object.entries(vars)){
       document.documentElement.style.setProperty('--'+k,v);
     }
-    try{localStorage.setItem('ora.appearance.boot3',JSON.stringify(vars))}catch{}
+    try{localStorage.setItem('ora.appearance.boot4',JSON.stringify(vars))}catch{}
     document.documentElement.dataset.palette=choice.palette;
     document.querySelectorAll('[data-palette]').forEach(b=>{
       if(b.tagName==='BUTTON') b.setAttribute('aria-pressed',b.dataset.palette===choice.palette);
@@ -55,7 +56,7 @@ export function initAppearance(profile='demo-local'){
   $('closeAppearance').onclick=()=>$('appearance').close();
   $('appearance').addEventListener('close',()=>$('accountMenu').querySelector('summary').focus());
   $('accent').oninput=e=>apply({...choice,accent:e.target.value});
-  $('resetTheme').onclick=()=>apply({palette:'Pizarra',accent:palettes.Pizarra.accent});
+  $('resetTheme').onclick=()=>apply({palette:'Mango',accent:palettes.Mango.accent});
   apply(choice,false);
 }
 /* Freeze the resolved appearance at download time for both file formats. */

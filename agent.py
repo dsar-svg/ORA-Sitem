@@ -396,7 +396,7 @@ Reglas:
 def ask(book, question, history, today, period, web=True, attachments=()):
     """Runs the tool loop and returns the answer text, the documents cited, the tools used and token usage."""
     if not os.getenv("OPENAI_API_KEY"):
-        raise AgentUnavailable("El agente no está configurado en este servidor.")
+        raise AgentUnavailable("Ora no está configurada en este servidor.")
     import openai  # loaded on use so ORA still starts without the agent's dependency
     client = openai.OpenAI(timeout=90, max_retries=2)
     context = f"Hoy es {today}. El usuario está viendo el período {period}. Moneda de la empresa: {book.currency}."
@@ -413,10 +413,10 @@ def ask(book, question, history, today, period, web=True, attachments=()):
                 max_output_tokens=8000, store=False, include=["reasoning.encrypted_content"],
                 prompt_cache_key="ora-agent")  # same instructions and tools on every call: cached input is billed at a discount
         except openai.RateLimitError as error:
-            raise AgentUnavailable("El agente está muy solicitado. Intenta de nuevo en un minuto.") from error
+            raise AgentUnavailable("Ora está muy solicitada. Intenta de nuevo en un minuto.") from error
         except (openai.APIConnectionError, openai.APIStatusError) as error:
             LOG.warning("Fallo del modelo · %r", error)
-            raise AgentUnavailable("El agente no está disponible en este momento.") from error
+            raise AgentUnavailable("Ora no está disponible en este momento. Intenta de nuevo en unos minutos.") from error
         if response.usage:
             usage["input"] += response.usage.input_tokens
             usage["output"] += response.usage.output_tokens
