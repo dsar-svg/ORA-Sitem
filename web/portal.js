@@ -18,7 +18,8 @@ const icons = {
   building:'M4 21V4h11v17 M15 10h5v11 M2 21h20 M7 8h1m3 0h1m-5 4h1m3 0h1m-5 4h1',
   calendar:'M3 5h18v16H3z M7 3v5m10-5v5M3 10h18',pin:'M12 21s7-7 7-12a7 7 0 1 0-14 0c0 5 7 12 7 12z M11 9a1 1 0 1 0 2 0 1 1 0 1 0-2 0',
   invoice:'M5 3h14v18l-3-2-4 2-4-2-3 2z M8 8h8m-8 4h6',credit:'M4 6h16v13H4z M4 10h16m-8 5h5',
-  clock:'M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0 M12 6v6l4 3'
+  clock:'M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0 M12 6v6l4 3',
+  spark:'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z'
 };
 const icon = k => '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="'+icons[k]+'"/></svg>';
 document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=icon(e.dataset.icon));
@@ -436,7 +437,8 @@ try{
       if(tab){if(mod==='sales')salesTab=tab;else if(mod==='ar')arTab=tab;else if(mod==='inventory')inventoryTab=tab}render()}
   });
 }catch(e){$('sync').textContent='No se pudo leer Odoo';$('sync').classList.add('failed');
-  $('dashboard').innerHTML='<div class="load-error" role="alert"><h2>No pudimos cargar este reporte</h2><p>Revisa tu conexión o que tu sesión de Odoo siga activa, y vuelve a intentarlo.</p><p class="hint">'+esc(e.message||'Error desconocido')+'</p><button class="retry" onclick="location.reload()">Reintentar</button></div>';
+  $('dashboard').innerHTML='<div class="load-error" role="alert"><h2>No pudimos cargar este reporte</h2><p>Revisa tu conexión o que tu sesión de Odoo siga activa, y vuelve a intentarlo.</p><p class="hint">'+esc(e.message||'Error desconocido')+'</p><button class="retry">Reintentar</button></div>';
+  $('dashboard').querySelector('.retry').addEventListener('click',()=>location.reload());
   if(location.search){const back=document.createElement('a');back.href='/';back.textContent='Volver a Ventas';$('dashboard').append(' ',back)}
   console.error(e)}finally{$('sync').classList.remove('loading');document.body.classList.remove('loading')}
 function renderStatement(filtered,period){

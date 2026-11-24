@@ -1,6 +1,7 @@
 import argparse
 import gzip
 import json
+import logging
 import os
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,13 +14,15 @@ from demo import Demo
 from odoo_sales import CARACAS, sales_report
 from datetime import date, datetime
 from model import SCHEMA, read_model, sync
+from agent import Book, AgentUnavailable, ask
+import calendar
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.getenv("ORA_DATA_DIR", ROOT / "data")) / "andina.sqlite3"
 ASSETS = {"/": ("index.html","text/html"), "/style.css": ("style.css","text/css"),
           "/portal.js": ("portal.js","text/javascript"), "/metrics.js": ("metrics.js","text/javascript")}
 
-for module in ("boot.js","inventory.js","theme.js","filters.js","customers.js","map.js","reports.js","exports.js","tour.js","restock.js"):
+for module in ("agent.js","boot.js","inventory.js","theme.js","filters.js","customers.js","map.js","reports.js","exports.js","tour.js","restock.js"):
     ASSETS["/" + module] = (module, "text/javascript")
 BOUNDARY = "cartography/VEN-ADM1-9469f09.geojson"
 ASSETS["/" + BOUNDARY] = (BOUNDARY, "application/geo+json")
@@ -36,8 +39,8 @@ ERP = configured_provider(ROOT,PLAN)
 SALES_MONTH = os.getenv("ORA_SALES_MONTH", "")
 if SALES_MONTH:
     date.fromisoformat(SALES_MONTH + "-01")
-    if not ERP or not (ERP.company_id or "").isdigit() or PLAN == "basico":
-        raise ValueError("Ventas Odoo requiere ODOO_COMPANY_ID y plan Intermedio o Avanzado")
+    if not ERP or not (ERP.company_id or "").isdigit():
+        raise ValueError("Los reportes de Odoo requieren ODOO_COMPANY_ID")
 USERS = {} if ERP else roster(PLAN)
 SESSIONS = Sessions()
 PUBLIC_ORIGIN = os.getenv("ORA_PUBLIC_ORIGIN","").rstrip("/")
@@ -54,15 +57,58 @@ LOGIN_MESSAGES = {
     "conexion": "Odoo no pudo validar el acceso. Inténtalo de nuevo más tarde.",
 }
 ASSETS["/login.js"] = ("login.js","text/javascript")
+for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json")):
+    ASSETS["/" + name] = (name, mime)
+PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest")
+LOG = logging.getLogger("ora")
+AGENT_PLANS = {"intermedio","avanzado"}
+AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
+# Inline style attributes carry bar widths and theme tokens; scripts stay same-origin only.
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "font-src 'self'; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 
 class Handler(BaseHTTPRequestHandler):
+    timeout = 30  # slow or idle clients release their thread
+    server_version = "ORA"
+    sys_version = ""
+
+    def secure(self):
+        self.send_header("Referrer-Policy","same-origin")
+        self.send_header("X-Frame-Options","DENY")
+        self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("Content-Security-Policy",CSP)
+        if PUBLIC_ORIGIN:
+            self.send_header("Strict-Transport-Security","max-age=31536000")
+
+    def client(self):
+        # Behind the HTTPS proxy the peer is the proxy; its first forwarded hop is the visitor.
+        forwarded = self.headers.get("X-Forwarded-For","") if PUBLIC_ORIGIN else ""
+        return forwarded.split(",")[0].strip() or self.client_address[0]
+
+    def guarded(self, handler):
+        try:
+            handler()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception:
+            LOG.exception("Error no controlado · %s %s · cliente %s", self.command, urlsplit(self.path).path, self.client())
+            try:
+                self.reply(500,"Ocurrió un error inesperado. Inténtalo de nuevo; si continúa, avisa a soporte.".encode())
+            except OSError:
+                pass
+
+    def do_GET(self):
+        self.guarded(self.get)
+
+    def do_POST(self):
+        self.guarded(self.post)
+
     def reply(self, status, content=b"", mime="text/plain", **headers):
         self.send_response(status)
         self.send_header("Content-Type",mime+"; charset=utf-8")
         self.send_header("Content-Length",str(len(content)))
         self.send_header("Cache-Control","no-store")
-        self.send_header("Referrer-Policy","same-origin")
-        self.send_header("X-Frame-Options","DENY")
+        self.secure()
         for key,value in headers.items():
             self.send_header(key,value)
         self.end_headers()
@@ -75,13 +121,73 @@ class Handler(BaseHTTPRequestHandler):
         page=page.replace("{{host}}",escape(ERP.host)).replace("{{message}}",escape(message))
         self.reply(200,page.encode(),"text/html")
 
-    def do_POST(self):
+    def same_origin(self):
+        port=self.server.server_port
+        origins={PUBLIC_ORIGIN} if PUBLIC_ORIGIN else {f"http://127.0.0.1:{port}",f"http://localhost:{port}"}
+        return self.headers.get("Origin") in origins
+
+    def report_month(self, month):
+        latest = datetime.now(CARACAS).date().isoformat()[:7]
+        try:
+            date.fromisoformat(month+"-01")
+            return len(month)==7 and os.getenv("ORA_START_MONTH","2026-01")<=month<=latest
+        except ValueError:
+            return False
+
+    def agent(self):
+        def answer(status, message):
+            self.reply(status, json.dumps({"error":message}, ensure_ascii=False).encode(), "application/json")
+        if not self.same_origin():
+            return answer(403, "Abre ORA desde su dirección configurada.")
+        account = SESSIONS.account(self.headers.get("Cookie","")) if ERP else None
+        user = account.login if account else (None if ERP else identity(self.headers.get("Authorization",""), USERS))
+        if not user:
+            return answer(401, "Tu sesión terminó. Vuelve a iniciar sesión.")
+        if PLAN not in AGENT_PLANS:
+            return answer(403, "El agente está incluido en los planes Gestión y Dirección.")
+        if not SESSIONS.attempt("agent:"+user, 20):
+            return answer(429, "Hiciste muchas preguntas seguidas. Espera unos minutos.")
+        try:
+            size = int(self.headers.get("Content-Length","0"))
+            if self.headers.get_content_type()!="application/json" or not 0<size<=65536:
+                raise ValueError()
+            body = json.loads(self.rfile.read(size))
+            question, month = body["question"].strip(), body["month"]
+            history = [{"role":m["role"],"content":m["content"]} for m in body.get("history",[])][-12:]
+            if (not 0<len(question)<=2000 or not isinstance(month,str) or not self.report_month(month)
+                    or any(m["role"] not in ("user","assistant") or not isinstance(m["content"],str) or len(m["content"])>6000 for m in history)):
+                raise ValueError()
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return answer(400, "La pregunta no es válida.")
+        if SALES_MONTH:
+            try:
+                data = sales_report(ERP.host, account, month, "clients")
+            except LoginDenied:
+                return answer(401, "Tu sesión de Odoo terminó. Vuelve a iniciar sesión.")
+            except PermissionError:
+                return answer(403, "Tu usuario de Odoo no tiene permiso para leer estos datos.")
+            except ProviderUnavailable as error:
+                LOG.warning("Odoo no disponible para el agente · %s · %r", user, error.__cause__ or error)
+                return answer(502, "No se pudo leer Odoo. Intenta de nuevo.")
+        else:
+            data = read_model(DATABASE, include_inventory=False)
+            year, number = map(int, month.split("-"))
+            data["cutoff"] = f"{month}-{calendar.monthrange(year,number)[1]:02d}"
+        try:
+            text, documents, tools, usage = ask(Book(data), question, history, datetime.now(CARACAS).date().isoformat(), month)
+        except AgentUnavailable as error:
+            return answer(503, str(error))
+        LOG.info("Agente · %s · mes %s · herramientas %s · tokens %s", user, month, ",".join(tools) or "-", usage)
+        self.reply(200, json.dumps({"answer":text,"documents":documents}, ensure_ascii=False).encode(), "application/json")
+
+    def post(self):
+        if self.path=="/api/agent":
+            self.agent()
+            return
         if not ERP or self.path not in ("/login","/logout"):
             self.reply(404)
             return
-        port=self.server.server_port
-        origins={PUBLIC_ORIGIN} if PUBLIC_ORIGIN else {f"http://127.0.0.1:{port}",f"http://localhost:{port}"}
-        if self.headers.get("Origin") not in origins:
+        if not self.same_origin():
             self.reply(403,"Abre ORA desde su dirección configurada y vuelve a iniciar sesión.".encode())
             return
         flags="; Path=/; HttpOnly; SameSite=Strict"+("; Secure" if PUBLIC_ORIGIN else "")
@@ -101,7 +207,7 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError,KeyError):
             self.reply(303,Location="/login?aviso=datos")
             return
-        if login in ERP.seats and not SESSIONS.attempt(login):
+        if not SESSIONS.attempt("ip:"+self.client(),20) or (login in ERP.seats and not SESSIONS.attempt(login)):
             self.reply(303,Location="/login?aviso=espera",**{"Retry-After":"300"})
             return
         try:
@@ -119,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         token=SESSIONS.create(account)
         self.reply(303,Location="/",**{"Set-Cookie":"ora_session="+token+"; Max-Age=3600"+flags})
 
-    def do_GET(self):
+    def get(self):
         path = urlsplit(self.path).path
         account=None
         if ERP:
@@ -130,7 +236,7 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.login_page()
                 return
-            if account is None and path not in ("/style.css","/login.js","/fonts/source-sans-3.ttf"):
+            if account is None and path not in PUBLIC_PATHS:
                 if path=="/":
                     self.reply(303,Location="/login")
                 else:
@@ -140,12 +246,10 @@ class Handler(BaseHTTPRequestHandler):
         else:
             user=identity(self.headers.get("Authorization",""), USERS)
         if user is None:
-            self.send_response(401)
-            self.send_header("WWW-Authenticate",'Basic realm="ORA piloto", charset="UTF-8"')
-            self.end_headers()
+            self.reply(401,**{"WWW-Authenticate":'Basic realm="ORA piloto", charset="UTF-8"'})
             return
         if path=="/restock.js" and "inventory" not in PLANS[PLAN]:
-            self.send_error(403)
+            self.reply(403)
             return
         if path == "/api/demo":
             if SALES_MONTH:
@@ -173,7 +277,8 @@ class Handler(BaseHTTPRequestHandler):
                 except PermissionError:
                     self.reply(403)
                     return
-                except ProviderUnavailable:
+                except ProviderUnavailable as error:
+                    LOG.warning("Odoo no disponible · vista %s · mes %s · %s · %r", view, month, account.login, error.__cause__ or error)
                     self.reply(502)
                     return
                 report["plan"] = PLAN
@@ -220,19 +325,15 @@ class Handler(BaseHTTPRequestHandler):
                 fills = {'<span>Perfil de demo</span>': f'<span>{escape(user)}</span>' if user and user != "demo-local" else None,
                          '<strong id="company">ORA</strong>': f'<strong id="company">{escape(account.company)}</strong>' if account else None,
                          '<span class="badge"></span>': f'<span class="badge">{"Odoo" if SALES_MONTH else "Demo"} · {plan_name}</span>',
-                         '<body>': '<body data-live="1">' if SALES_MONTH else None}
+                         '<body>': '<body data-live="1">' if SALES_MONTH else None,
+                         '<button id="agentOpen" hidden': '<button id="agentOpen"' if PLAN in AGENT_PLANS and AGENT_READY else None}
                 for marker, value in fills.items():
                     if value:
                         content = content.replace(marker.encode(), value.encode())
         else:
-            self.send_error(404)
+            self.reply(404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", mime + "; charset=utf-8")
-        self.send_header("Cache-Control","no-store")
-        self.send_header("Content-Length",str(len(content)))
-        self.end_headers()
-        self.wfile.write(content)
+        self.reply(200, content, mime)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ORA · portal local de demostración")
@@ -241,6 +342,7 @@ if __name__ == "__main__":
     parser.add_argument("--erp-container", action="store_true",
                         help="Escuchar en todas las interfaces detrás del proxy HTTPS del piloto ERP")
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     if args.erp_container and (not ERP or not PUBLIC_ORIGIN or not os.getenv("ORA_PLAN")):
         parser.error("El contenedor requiere Odoo, ORA_PUBLIC_ORIGIN y ORA_PLAN configurados")
     if SALES_MONTH and args.command == "serve":

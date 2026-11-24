@@ -143,3 +143,49 @@ class LoginTests(unittest.TestCase):
         for _ in range(5):
             self.assertEqual(self.login()[1]["Location"],"/login?aviso=acceso")
         self.assertEqual(self.login()[1]["Location"],"/login?aviso=espera")
+
+    def test_security_headers_and_unexpected_errors(self):
+        status, headers, _ = self.request("/login")
+        self.assertEqual(status, 200)
+        for name in ("Content-Security-Policy","X-Content-Type-Options","X-Frame-Options"):
+            self.assertIn(name, headers)
+        self.assertNotIn("Python", headers.get("Server",""))
+        cookie = self.login()[1]["Set-Cookie"].split(";")[0]
+        self.assertIn("frame-ancestors 'none'", self.request("/",cookie=cookie)[1]["Content-Security-Policy"])
+        with patch("app.read_model", side_effect=KeyError("partner")), self.assertLogs("ora", "ERROR"):
+            self.assertEqual(self.request("/api/demo",cookie=cookie)[0], 500)
+
+    @patch("app.SALES_MONTH", "2026-10")
+    @patch("app.PLAN", "basico")
+    def test_basic_plan_reads_live_sales_only(self):
+        cookie = self.login()[1]["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.request("/api/demo?view=ar",cookie=cookie)[0], 403)
+        self.assertIn(b'data-module="ar" hidden', self.request("/",cookie=cookie)[2])
+
+    def test_login_attempts_are_limited_per_address(self):
+        self.response.read.return_value=b'{"error":{"data":{"name":"odoo.exceptions.AccessDenied"}}}'
+        for i in range(20):
+            self.request("/login",{"email":f"otro{i}@example.test","password":"x"})
+        self.assertEqual(self.login()[1]["Location"],"/login?aviso=espera")
+
+    def agent_request(self, cookie, body):
+        c=http.client.HTTPConnection("127.0.0.1",self.server.server_port)
+        c.request("POST","/api/agent",json.dumps(body),{"Cookie":cookie,"Content-Type":"application/json",
+                  "Origin":f"http://127.0.0.1:{self.server.server_port}"})
+        r=c.getresponse(); status=r.status; data=json.loads(r.read()); c.close()
+        return status,data
+
+    def test_agent_requires_session_plan_and_configuration(self):
+        question={"question":"¿Cuánto vendí?","month":"2026-10","history":[]}
+        self.assertEqual(self.agent_request("",question)[0],401)
+        cookie=self.login()[1]["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.agent_request(cookie,{**question,"month":"1999-01"})[0],400)
+        with patch("app.PLAN","basico"):
+            self.assertEqual(self.agent_request(cookie,question)[0],403)
+        with patch.dict("os.environ",{},clear=True):
+            status,data=self.agent_request(cookie,question)
+        self.assertEqual(status,503)
+        self.assertIn("no está configurado",data["error"])
+        with patch("app.ask",return_value=("Vendiste USD 8.056,00.",[{"numero":"FAC-26-10030"}],["ventas"],{"input":1,"output":1})):
+            status,data=self.agent_request(cookie,question)
+        self.assertEqual((status,data["answer"],data["documents"][0]["numero"]),(200,"Vendiste USD 8.056,00.","FAC-26-10030"))

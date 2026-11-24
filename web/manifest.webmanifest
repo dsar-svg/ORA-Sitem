@@ -1,0 +1,14 @@
+{
+  "name": "ORA · Reportes gerenciales",
+  "short_name": "ORA",
+  "description": "Ventas, cobranza, clientes e inventario de tu ERP, listos para decidir.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f7",
+  "theme_color": "#f5f6f7",
+  "icons": [
+    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
