@@ -10,7 +10,7 @@ from datetime import date
 
 LOG = logging.getLogger("ora.agent")
 MODEL = os.getenv("ORA_AI_MODEL", "gpt-5-mini")
-EFFORT = os.getenv("ORA_AI_EFFORT", "medium")  # reasoning effort: minimal, low, medium, high
+EFFORT = os.getenv("ORA_AI_EFFORT", "low")  # minimal, low, medium, high; low covers data questions at a fraction of medium
 MAX_TURNS = 8
 MAX_DOCS = 40  # documents returned per tool call; totals always cover every matching document
 
@@ -209,7 +209,8 @@ def ask(book, question, history, today, period, web=True):
             # store=False keeps company data out of OpenAI's stored conversations; reasoning travels encrypted instead.
             response = client.responses.create(
                 model=MODEL, instructions=SYSTEM, input=items, tools=tools, reasoning={"effort": EFFORT},
-                max_output_tokens=8000, store=False, include=["reasoning.encrypted_content"])
+                max_output_tokens=8000, store=False, include=["reasoning.encrypted_content"],
+                prompt_cache_key="ora-agent")  # same instructions and tools on every call: cached input is billed at a discount
         except openai.RateLimitError as error:
             raise AgentUnavailable("El agente está muy solicitado. Intenta de nuevo en un minuto.") from error
         except (openai.APIConnectionError, openai.APIStatusError) as error:
