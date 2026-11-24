@@ -167,3 +167,25 @@ class LoginTests(unittest.TestCase):
         for i in range(20):
             self.request("/login",{"email":f"otro{i}@example.test","password":"x"})
         self.assertEqual(self.login()[1]["Location"],"/login?aviso=espera")
+
+    def agent_request(self, cookie, body):
+        c=http.client.HTTPConnection("127.0.0.1",self.server.server_port)
+        c.request("POST","/api/agent",json.dumps(body),{"Cookie":cookie,"Content-Type":"application/json",
+                  "Origin":f"http://127.0.0.1:{self.server.server_port}"})
+        r=c.getresponse(); status=r.status; data=json.loads(r.read()); c.close()
+        return status,data
+
+    def test_agent_requires_session_plan_and_configuration(self):
+        question={"question":"¿Cuánto vendí?","month":"2026-10","history":[]}
+        self.assertEqual(self.agent_request("",question)[0],401)
+        cookie=self.login()[1]["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.agent_request(cookie,{**question,"month":"1999-01"})[0],400)
+        with patch("app.PLAN","basico"):
+            self.assertEqual(self.agent_request(cookie,question)[0],403)
+        with patch.dict("os.environ",{},clear=True):
+            status,data=self.agent_request(cookie,question)
+        self.assertEqual(status,503)
+        self.assertIn("no está configurado",data["error"])
+        with patch("app.ask",return_value=("Vendiste USD 8.056,00.",[{"numero":"FAC-26-10030"}],["ventas"],{"input":1,"output":1})):
+            status,data=self.agent_request(cookie,question)
+        self.assertEqual((status,data["answer"],data["documents"][0]["numero"]),(200,"Vendiste USD 8.056,00.","FAC-26-10030"))
