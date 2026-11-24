@@ -97,7 +97,7 @@ export function renderRestock(data,options,ui){
     show(r.name,'REPOSICIÓN · '+r.store,'<p class="detailsum">'+esc(r.status)+(r.missing.length?' · Falta '+esc(r.missing.join(', ')):'')+'</p><section class="profile-section"><dl>'+facts.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl></section>');
   }
   const exportRows=rows.map(r=>values(r).map(v=>v??'Sin dato'));
-  const table='<div class="table-wrap restock-table"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+values(r).map((v,i)=>'<td>'+ (i===1?'<button class="link" data-a="'+action(()=>detail(r))+'">'+esc(v)+' ↗</button>':esc(typeof v==='number'?number(v):v??'—'))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  const table='<div class="table-wrap restock-table"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+values(r).map((v,i)=>'<td>'+ (i===1?'<button class="link" data-a="'+action(()=>detail(r))+'">'+esc(v)+'</button>':esc(typeof v==='number'?number(v):v??'—'))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
   return {html:'<h2>Sugerencias de reposición</h2><p class="hint">Revisión humana · Corte '+options.end+' · Selecciona un producto para consultar el cálculo.</p>'+table+
     (!rows.length?'<p class="empty">Sin referencias para estos filtros.</p>':'')+
     '<p class="hint">Se repone por debajo del punto de reposición, hasta cubrir el plazo y 7 días adicionales, más la seguridad. Cantidades redondeadas hacia arriba en la unidad del artículo. Sin demanda, la cobertura en días no aplica.</p>',

@@ -131,7 +131,7 @@ async function pdf(r,name,brand){
   doc.save(name+'.pdf');
 }
 export function exportMenu(scope){
-  return '<details class="export-menu"><summary>Exportar ▾</summary><div>'+['xlsx','pdf'].map((fmt,i)=>
+  return '<details class="export-menu"><summary>Exportar</summary><div>'+['xlsx','pdf'].map((fmt,i)=>
     '<button type="button" data-export="'+scope+'" data-format="'+fmt+'">'+['Excel (.xlsx)','PDF (.pdf)'][i]+'</button>').join('')+'</div></details>';
 }
 export async function downloadReport(report,format){
