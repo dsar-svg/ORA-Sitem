@@ -661,3 +661,11 @@ th button{display:inline-flex;align-items:center;gap:4px}
   #agentOpen{font-size:0;gap:0}#agentOpen svg.icon{width:22px;height:22px}
   #agent{width:100vw;border-radius:0;padding:16px}
 }
+.agent-attach{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--line);border-radius:10px;cursor:pointer;color:var(--muted);flex:none}
+.agent-attach:hover{color:var(--plum);border-color:var(--plum)}.agent-attach:has(:focus-visible){outline:2px solid var(--plum);outline-offset:2px}
+#agentAttached{display:flex;flex-wrap:wrap;gap:6px}#agentAttached:empty{display:none}
+.agent-chip{display:inline-flex;align-items:center;gap:6px;background:var(--tint);border-radius:999px;padding:4px 6px 4px 12px;font-size:13px}
+.agent-chip button{width:20px;height:20px;border-radius:50%;background:transparent;position:relative}
+.agent-chip button:after{content:"";position:absolute;inset:4px;background:var(--muted);-webkit-mask:var(--ico-x) center/contain no-repeat;mask:var(--ico-x) center/contain no-repeat}
+.agent-files{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.agent-files button{background:var(--fill);color:var(--on-fill);border-radius:8px;padding:8px 12px;font-weight:650;font-size:14px}

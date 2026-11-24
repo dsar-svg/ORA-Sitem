@@ -19,6 +19,7 @@ const icons = {
   calendar:'M3 5h18v16H3z M7 3v5m10-5v5M3 10h18',pin:'M12 21s7-7 7-12a7 7 0 1 0-14 0c0 5 7 12 7 12z M11 9a1 1 0 1 0 2 0 1 1 0 1 0-2 0',
   invoice:'M5 3h14v18l-3-2-4 2-4-2-3 2z M8 8h8m-8 4h6',credit:'M4 6h16v13H4z M4 10h16m-8 5h5',
   clock:'M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0 M12 6v6l4 3',
+  clip:'M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.3 3.3 0 0 1 4.7 4.7l-9 9a1.7 1.7 0 0 1-2.4-2.4L16 7.5',
   spark:'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z'
 };
 const icon = k => '<svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="'+icons[k]+'"/></svg>';

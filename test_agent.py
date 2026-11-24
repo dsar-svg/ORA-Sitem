@@ -51,6 +51,39 @@ class AgentTests(unittest.TestCase):
         self.assertEqual((text, tools, usage), ("Vendiste USD 8.056,00.", ["ventas"], {"input": 30, "output": 13}))
         self.assertTrue(docs and all("numero" in d for d in docs))
 
+    def test_odoo_queries_are_scoped_and_allowlisted(self):
+        from decimal import Decimal
+        calls = []
+        reader = NS(scope=lambda shared=False: [["company_id", "=", 9]],
+                    call=lambda model, method, kwargs: calls.append((model, method, kwargs)) or
+                    [{"partner_id": [3, "Cliente"], "amount_residual": Decimal("12.50"), "__count": 2}])
+        book = agent.Book({"company": [{"name": "Empresa", "currency": "USD"}]}, reader)
+        result = book.consultar_odoo("account.move", "read_group", '[["move_type","=","in_invoice"]]',
+                                     ["amount_residual:sum"], ["partner_id"], "", 10)
+        self.assertEqual(calls[0][2]["domain"], [["company_id", "=", 9], ["move_type", "=", "in_invoice"]])
+        self.assertEqual(result["filas"][0], {"partner_id": "Cliente", "amount_residual": 12.5, "registros": 2})
+        for bad in (("hr.employee", "[]"), ("account.move", '[["partner_id.bank_ids","=",1]]')):
+            with self.assertRaises(ValueError):
+                book.consultar_odoo(bad[0], "search_read", bad[1], [], [], "", 5)
+        with self.assertRaises(ValueError):
+            book.consultar_odoo("res.partner", "search_read", "[]", ["password"], [], "", 5)
+
+    def test_files_use_the_exact_query_rows(self):
+        book = demo_book()
+        ref = book.ventas("2026-10", "total", "", 5)["consulta"]
+        book.crear_archivo("xlsx", "Ventas octubre", [ref])
+        table = book.files[0]["report"]["tables"][0]
+        self.assertEqual(sum(row[5] for row in table["rows"]), 805600)
+        self.assertEqual(table["amounts"], [5])
+        with self.assertRaises(ValueError):
+            book.crear_archivo("pdf", "x", ["c99"])
+
+    def test_attachments_become_model_inputs(self):
+        parts = agent.content("Compara", [{"name": "a.pdf", "type": "application/pdf", "data": "QQ=="},
+                                          {"name": "b.csv", "type": "text/csv", "data": "YSxi"}])
+        self.assertEqual([p["type"] for p in parts], ["input_text", "input_file", "input_text"])
+        self.assertIn("a,b", parts[2]["text"])
+
     def test_unconfigured_agent_says_so(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(agent.AgentUnavailable):
