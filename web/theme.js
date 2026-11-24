@@ -1,6 +1,6 @@
 // Accent variants inside one warm world: only the action colour and the previous-period sand change.
 const palettes = {
-  Coral:{accent:'#e8532a',secondary:'#e8cfb6',paper:'#fbf4ec',surface:'#ffffff',nav:'#ffffff'},
+  Coral:{accent:'#f25c2e',secondary:'#e8cfb6',paper:'#fbf4ec',surface:'#ffffff',nav:'#ffffff'},
   Cobalto:{accent:'#2f5fd6',secondary:'#d3dbe8',paper:'#f5f3ef',surface:'#ffffff',nav:'#ffffff'},
   Pino:{accent:'#1f7a55',secondary:'#cfe0d2',paper:'#f4f4ee',surface:'#ffffff',nav:'#ffffff'}
 };
@@ -37,7 +37,7 @@ export function initAppearance(profile='demo-local'){
   function apply(next,save=true){
     choice=next;
     const p=palettes[choice.palette],accent=accessibleAccent(choice.accent,p);
-    const vars={plum:accent,paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
+    const fill=choice.accent,vars={plum:accent,fill,'on-fill':ratio(fill,'#ffffff')>=ratio(fill,'#2b241f')?'#ffffff':'#2b241f',paper:p.paper,white:p.surface,nav:p.nav,peach:p.secondary};
     for(const [k,v] of Object.entries(vars)){
       document.documentElement.style.setProperty('--'+k,v);
     }

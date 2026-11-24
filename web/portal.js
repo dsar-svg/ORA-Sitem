@@ -12,6 +12,7 @@ const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icons = {
   user:'M16 8a4 4 0 1 1-8 0 4 4 0 1 1 8 0 M4 21v-2a8 8 0 0 1 16 0v2',
+  users:'M13 8a3.5 3.5 0 1 1-7 0 3.5 3.5 0 1 1 7 0 M3 20v-1a6.5 6.5 0 0 1 13 0v1 M16 4.6a3.5 3.5 0 0 1 0 6.8 M18.5 14.2A6.5 6.5 0 0 1 22 20v0',
   box:'M3 7l9-5 9 5-9 5z M3 7v10l9 5 9-5V7 M12 12v10',
   chart:'M3 4v16h18 M7 15l4-5 4 2 6-7',wallet:'M3 7h17v13H3z M3 7V5l14-3v5 M15 12h6v4h-6z',
   building:'M4 21V4h11v17 M15 10h5v11 M2 21h20 M7 8h1m3 0h1m-5 4h1m3 0h1m-5 4h1',
@@ -107,7 +108,7 @@ function openRows(title,rows,receivables=moduleName==='ar',extra='',range,asOf=l
 }
 function drill(name,rows,range){return action(()=>openRows(name,rows,moduleName==='ar','',range))}
 function kpi(title,value,sub,symbol,rows,primary=false){
-  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span><span class="arrow"></span><strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span></button>';
+  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span>'+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
 }
 function panel(title,sub,body){return '<article class="panel"><h2>'+title+'</h2><p class="hint">'+esc(sub)+'</p>'+body+'</article>'}
 function dot(color){return '<i class="dot" style="background:'+color+'"></i>'}
@@ -161,7 +162,7 @@ function horizontal(name,value,n,max,id,highlight=false){
 }
 function breakdown(title,label,entries,total){
   const ar=moduleName==='ar';
-  return panel(title,'Selecciona una fila para consultar sus documentos.','<div class="table-wrap"><table><thead><tr><th>'+label+'</th><th class="num">Documentos</th><th class="num">Participación</th><th class="num">Importe</th>'+(ar?'<th class="num">Vencido</th>':'')+'<th>Detalle</th></tr></thead><tbody>'+entries.map(g=>{
+  return panel(title,'Selecciona una fila para consultar sus documentos.','<div class="table-wrap"><table class="breakdown"><thead><tr><th>'+label+'</th><th class="num">Documentos</th><th class="num">Participación</th><th class="num">Importe</th>'+(ar?'<th class="num">Vencido</th>':'')+'<th>Detalle</th></tr></thead><tbody>'+entries.map(g=>{
     const share=total?g.value/total*100:0;
     return '<tr><td>'+esc(g.name)+'</td><td class="num">'+new Set(g.docs.map(d=>d.id)).size+'</td><td class="num"><span class="bar"><i style="width:'+Math.max(0,Math.min(100,share))+'%"></i></span>'+pct(share)+'</td><td class="num">'+money(g.value)+'</td>'+(ar?'<td class="num">'+money(sum(g.docs.filter(overdue)))+'</td>':'')+'<td><button class="link" data-a="'+drill(g.name,g.docs)+'">Ver documentos</button></td></tr>';
   }).join('')+'</tbody></table></div>'+(entries.length?'':'<p class="empty">Sin movimientos para estos filtros.</p>'));
@@ -246,7 +247,7 @@ function render(){
     viewReport.summary.push(['Facturas netas sin impuestos',sum(current.filter(d=>d.sign===1))],['Notas de crédito',sum(current.filter(d=>d.sign<0))],['Comparativo '+rangeText(ranges.priorFirst,ranges.priorEnd),sum(prior)]);
     const invoices=current.filter(d=>d.sign===1), credits=current.filter(d=>d.sign===-1),net=sum(current);
     const previous=sum(prior),growth=previous>0?(net-previous)/previous*100:null;
-    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':(growth>=0?'↑ ':'↓ ')+pct(Math.abs(growth))+' vs. mes anterior','chart',current,true);
+    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),'chart',current,true);
     cards=kpi('Facturas emitidas',String(invoices.length),money(sum(invoices))+' sin impuestos','invoice',invoices)+
       kpi('Notas de crédito',money(sum(credits)),credits.length+(credits.length===1?' documento de ajuste':' documentos de ajuste'),'credit',credits);
     evolution=panel('Evolución de ventas',range+' frente a '+rangeText(ranges.priorFirst,ranges.priorEnd)+' · '+curr+(coverage?' · '+coverage:''),chart(current,prior,period,prev));

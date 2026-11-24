@@ -491,3 +491,38 @@ dialog::backdrop{background:rgb(43 36 31/.42);backdrop-filter:blur(2px)}
 .profile-menu,.choices,.export-menu>div{border:0}.dialog-head small{display:none}
 .kpi,.kpi.primary{border:0}@media(max-width:800px){aside{border-top:0}}
 #detailBody summary::marker{color:var(--plum)}#detailBody summary{font-weight:650}
+
+/* ===== Review fixes: white cards everywhere, bright coral fills, phone rhythm ===== */
+:root{--fill:#f25c2e;--on-fill:#2b241f}
+.kpis .kpi:not(.primary),.support .kpi{background:var(--white);border-radius:var(--radius)}
+#dashboard[data-module=inventory] .panels .panel:nth-child(2){background:var(--white);border-left:0;border-radius:var(--radius)}
+.support .kpi{display:flex;flex-direction:column;align-items:flex-start}.support .kpi strong{margin-top:auto;padding-top:8px}
+.primary .cta{display:inline-flex;align-items:center;gap:6px;margin-top:18px;padding:9px 12px 9px 16px;border-radius:999px;background:var(--fill);color:var(--on-fill);font-weight:650;font-size:14.5px;transition:transform .35s var(--spring)}
+.primary .cta:after{content:"";width:16px;height:16px;background:currentColor;-webkit-mask:var(--ico-chevron) center/contain no-repeat;mask:var(--ico-chevron) center/contain no-repeat}
+.kpi.primary:hover .cta{transform:translateX(3px)}
+#filterCount:not(:empty),.login-submit,#tourOffer #tourStart,#tourCard #tourNext{background:var(--fill);border-color:var(--fill);color:var(--on-fill)}
+.login-submit:hover{background:color-mix(in srgb,var(--fill) 88%,#000)}
+.login-submit{display:inline-flex;align-items:center;justify-content:center;gap:6px}.login-submit:after{content:"";width:16px;height:16px;background:currentColor;-webkit-mask:var(--ico-chevron) center/contain no-repeat;mask:var(--ico-chevron) center/contain no-repeat}
+.chart g:hover rect,.chart g:focus-visible rect{fill:var(--fill)}.pin circle{fill:var(--fill)}
+.client-list .directory-row{background:transparent;box-shadow:none;border-radius:0;border-bottom:1px solid var(--line);padding:12px 18px}
+.client-list .directory-row:last-child{border-bottom:0}.client-list .directory-row:hover{transform:none;background:var(--tint)}
+details>summary{list-style:none;cursor:pointer}details>summary::-webkit-details-marker{display:none}
+#detailBody details:not(.export-menu)>summary,.statement-breakdown summary{display:flex;align-items:center;gap:8px}
+#detailBody details:not(.export-menu)>summary:before,.statement-breakdown summary:before{content:"";width:16px;height:16px;flex:none;background:var(--plum);-webkit-mask:var(--ico-chevron) center/contain no-repeat;mask:var(--ico-chevron) center/contain no-repeat;transition:transform .2s ease}
+#detailBody details:not(.export-menu)[open]>summary:before,.statement-breakdown[open]>summary:before{transform:rotate(90deg)}
+.aside-foot{padding-top:12px}
+@media(max-width:800px){
+  .filters,#secondaryFilters{flex-wrap:nowrap}
+  .filters{overflow-x:auto;scrollbar-width:none;margin:14px -16px 18px;padding:2px 16px 4px;scroll-padding-inline:16px}
+  .filters::-webkit-scrollbar{display:none}
+  .filters label,#secondaryFilters label{flex:none}
+  .filters select,.filters input{max-width:44vw}
+  .report-bar{flex-wrap:nowrap;align-items:center}
+  .report-tabs{overflow-x:auto;scrollbar-width:none;min-width:0;flex-wrap:nowrap}.report-tabs button{white-space:nowrap;padding:8px 14px}
+  #viewExport{flex:none}.export-menu summary{padding:8px 14px}
+  .trend .chart{overflow:visible}.trend .chart text{font-size:17px}
+}
+@media(max-width:560px){
+  .breakdown th:nth-child(2),.breakdown td:nth-child(2),.breakdown th:nth-child(3),.breakdown td:nth-child(3){display:none}
+  .breakdown td{padding:12px 6px}.breakdown td:first-child{word-break:break-word}
+}

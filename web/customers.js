@@ -45,7 +45,7 @@ export function customers(data,docs,filter,ui){
     show(c.name,'FICHA DE CLIENTE',body);
   }
   function card(c){
-    const initials=c.name.split(/\s+/).slice(0,2).map(w=>w[0]).join('');
+    const initials=c.name.split(/\s+/).filter(w=>!/^(de|del|la|las|los|el|y|e)$/i.test(w)).slice(0,2).map(w=>w[0]).join('').toUpperCase();
     return '<button class="directory-card directory-row" data-a="'+action(()=>profile(c))+'"><span class="row-name"><span class="monogram">'+esc(initials)+'</span><strong>'+esc(c.name)+'</strong></span><span class="row-city">'+esc(c.zone)+'</span>'+
       '<span class="row-number"><small>Ventas</small>'+money(sum(c.sales))+'</span>'+
       (ar?'<span class="row-number"><small>Pendiente</small>'+money(sum(c.ar))+'</span>':'')+'<span class="row-open" aria-hidden="true"></span></button>';

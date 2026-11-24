@@ -142,7 +142,7 @@ export function customerMap(all,filter,ui){
     '<div class="mapbar"><div class="mapmode">'+toggle('city','Ciudades')+toggle('state','Estados')+'</div><span>'+located.length+' de '+all.length+' clientes en el mapa</span></div>'+
     '<div class="map venezuela"><div class="maptools">'+zoom(.5,'Alejar mapa','−')+zoom(2,'Acercar mapa','+')+'<button class="country" data-focus="national" data-a="'+action(clear)+'">Venezuela</button></div>'+
     '<svg tabindex="0" viewBox="0 0 '+W+' '+H+'" aria-label="Mapa de Venezuela. Arrastra o usa las flechas para mover. Agrupación por '+precision+'"><g class="pan-layer"><g transform="'+projection.transform+'">'+shapes+'</g>'+pins+'</g></svg></div>'+
-    (selection?'<a class="map-selection" href="#zone-clients">Ver '+esc(selection)+' ↓</a>':'')+'<div class="geo-legend"><strong>Clientes por zona</strong>'+ranges.map((r,i)=>'<span data-level="'+i+'"><i></i>'+r+'</span>').join('')+'</div>'+
+    (selection?'<a class="map-selection" href="#zone-clients">Ver '+esc(selection)+'</a>':'')+'<div class="geo-legend"><strong>Clientes por zona</strong>'+ranges.map((r,i)=>'<span data-level="'+i+'"><i></i>'+r+'</span>').join('')+'</div>'+
     '<details class="map-source"><summary aria-label="Información cartográfica" title="Información cartográfica">ⓘ</summary><p class="geo-credit"><a href="https://www.geoboundaries.org/api/current/gbOpen/VEN/ADM1/">geoBoundaries VEN ADM1</a> · OCHA Venezuela / Instituto Nacional de Estadística · <a href="https://creativecommons.org/licenses/by/3.0/igo/">CC BY 3.0 IGO</a></p></details></article>';
   return {...controls,html};
 }
