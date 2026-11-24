@@ -119,14 +119,14 @@ class Sessions:
         self.attempts = {}
         self.lock = Lock()
 
-    def attempt(self, login):
-        # Called only for configured seats. Count concurrent attempts before contacting the ERP.
+    def attempt(self, login, limit=5):
+        # Keys are configured seats or "ip:<address>". Count attempts before contacting the ERP.
         with self.lock:
             now = monotonic()
             times = self.attempts.setdefault(login,deque())
             while times and times[0] <= now-300:
                 times.popleft()
-            if len(times)>=5:
+            if len(times)>=limit:
                 return False
             times.append(now)
             return True

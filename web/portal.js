@@ -436,7 +436,8 @@ try{
       if(tab){if(mod==='sales')salesTab=tab;else if(mod==='ar')arTab=tab;else if(mod==='inventory')inventoryTab=tab}render()}
   });
 }catch(e){$('sync').textContent='No se pudo leer Odoo';$('sync').classList.add('failed');
-  $('dashboard').innerHTML='<div class="load-error" role="alert"><h2>No pudimos cargar este reporte</h2><p>Revisa tu conexión o que tu sesión de Odoo siga activa, y vuelve a intentarlo.</p><p class="hint">'+esc(e.message||'Error desconocido')+'</p><button class="retry" onclick="location.reload()">Reintentar</button></div>';
+  $('dashboard').innerHTML='<div class="load-error" role="alert"><h2>No pudimos cargar este reporte</h2><p>Revisa tu conexión o que tu sesión de Odoo siga activa, y vuelve a intentarlo.</p><p class="hint">'+esc(e.message||'Error desconocido')+'</p><button class="retry">Reintentar</button></div>';
+  $('dashboard').querySelector('.retry').addEventListener('click',()=>location.reload());
   if(location.search){const back=document.createElement('a');back.href='/';back.textContent='Volver a Ventas';$('dashboard').append(' ',back)}
   console.error(e)}finally{$('sync').classList.remove('loading');document.body.classList.remove('loading')}
 function renderStatement(filtered,period){

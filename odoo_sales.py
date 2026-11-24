@@ -3,7 +3,8 @@ import json
 import os
 import re
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
+from time import monotonic
 from http.client import HTTPSConnection, HTTPException
 
 from erp_auth import LoginDenied, ProviderUnavailable
@@ -12,10 +13,12 @@ CARACAS = timezone(timedelta(hours=-4))
 
 
 def cents(value):
-    amount = Decimal(str(value)) * 100
-    if amount != amount.to_integral_value():
-        raise ProviderUnavailable("La moneda requiere más de dos decimales")
-    return int(amount)
+    # Odoo stores amounts rounded to the currency; float artifacts beyond cents round half up.
+    return int((Decimal(str(value)) * 100).quantize(Decimal(1), ROUND_HALF_UP))
+
+
+MAX_REPLY = int(os.getenv("ORA_ODOO_MAX_MB","120")) * 1024 * 1024
+DEADLINE = float(os.getenv("ORA_REPORT_SECONDS","170"))  # below the browser's 180 s wait
 
 
 class Reader:
@@ -23,12 +26,16 @@ class Reader:
         if not account.upstream_cookie:
             raise LoginDenied()
         self.host, self.account = host, account
+        self.until = monotonic() + DEADLINE
 
     def call(self, model, method, kwargs):
         kwargs["context"] = {"allowed_company_ids":[self.account.company_id], "active_test":False,
                              "tz":"America/Caracas"}
         params = dict(model=model, method=method, args=[], kwargs=kwargs)
-        connection = HTTPSConnection(self.host, timeout=45)
+        left = self.until - monotonic()
+        if left <= 0:
+            raise ProviderUnavailable("El reporte superó el tiempo máximo de lectura de Odoo")
+        connection = HTTPSConnection(self.host, timeout=min(45, left))
         try:
             connection.request("POST", f"/web/dataset/call_kw/{model}/{method}",
                                json.dumps({"jsonrpc":"2.0","method":"call","id":1,"params":params}),
@@ -36,13 +43,17 @@ class Reader:
             response = connection.getresponse()
             if response.status != 200:
                 raise ProviderUnavailable()
-            reply = json.loads(response.read(), parse_float=Decimal)
+            raw = response.read(MAX_REPLY + 1)
+            if len(raw) > MAX_REPLY:
+                raise ProviderUnavailable("Odoo devolvió más datos de los admitidos")
+            reply = json.loads(raw, parse_float=Decimal)
         except (OSError, HTTPException, ValueError) as error:
             raise ProviderUnavailable() from error
         finally:
             connection.close()
         if "error" in reply:
-            name = reply["error"].get("data", {}).get("name")
+            error = reply["error"] if isinstance(reply["error"], dict) else {}
+            name = (error.get("data") or {}).get("name")
             if name == "odoo.http.SessionExpiredException":
                 raise LoginDenied()
             if name in ("odoo.exceptions.AccessError", "odoo.exceptions.AccessDenied"):

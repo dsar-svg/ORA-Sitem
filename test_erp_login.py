@@ -143,3 +143,27 @@ class LoginTests(unittest.TestCase):
         for _ in range(5):
             self.assertEqual(self.login()[1]["Location"],"/login?aviso=acceso")
         self.assertEqual(self.login()[1]["Location"],"/login?aviso=espera")
+
+    def test_security_headers_and_unexpected_errors(self):
+        status, headers, _ = self.request("/login")
+        self.assertEqual(status, 200)
+        for name in ("Content-Security-Policy","X-Content-Type-Options","X-Frame-Options"):
+            self.assertIn(name, headers)
+        self.assertNotIn("Python", headers.get("Server",""))
+        cookie = self.login()[1]["Set-Cookie"].split(";")[0]
+        self.assertIn("frame-ancestors 'none'", self.request("/",cookie=cookie)[1]["Content-Security-Policy"])
+        with patch("app.read_model", side_effect=KeyError("partner")), self.assertLogs("ora", "ERROR"):
+            self.assertEqual(self.request("/api/demo",cookie=cookie)[0], 500)
+
+    @patch("app.SALES_MONTH", "2026-10")
+    @patch("app.PLAN", "basico")
+    def test_basic_plan_reads_live_sales_only(self):
+        cookie = self.login()[1]["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.request("/api/demo?view=ar",cookie=cookie)[0], 403)
+        self.assertIn(b'data-module="ar" hidden', self.request("/",cookie=cookie)[2])
+
+    def test_login_attempts_are_limited_per_address(self):
+        self.response.read.return_value=b'{"error":{"data":{"name":"odoo.exceptions.AccessDenied"}}}'
+        for i in range(20):
+            self.request("/login",{"email":f"otro{i}@example.test","password":"x"})
+        self.assertEqual(self.login()[1]["Location"],"/login?aviso=espera")
