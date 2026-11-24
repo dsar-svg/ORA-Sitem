@@ -1,6 +1,7 @@
 *
 !Dockerfile
 !access.py
+!agent.py
 !app.py
 !demo.py
 !erp_auth.py
