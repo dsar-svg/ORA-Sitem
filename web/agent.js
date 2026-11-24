@@ -1,11 +1,20 @@
 import { downloadReport } from './exports.js';
-// Panel "Pregúntale a ORA": sends the question with the visible period and shows the answer with its supporting documents.
+import { face } from './ora.js';
+// Sección "Ora": the analyst's own page. Sends the question with the visible period and shows answers with their evidence.
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const history = [];
-const suggestions = ['¿Cuánto vendí este mes frente al anterior?','¿Quiénes me deben más vencido?','¿Qué vendedor facturó más este mes?','¿Qué productos se vendieron más?'];
-let busy = false, attached = [];
+const STORE = 'ora.chat.v1';  // sessionStorage: the conversation survives navigation but not closing the browser
+const topics = [
+  {title:'Ventas', icon:'chart', ask:'¿Cuánto vendí este mes frente al anterior y qué vendedor facturó más?'},
+  {title:'Cobranza', icon:'wallet', ask:'¿Quiénes me deben más vencido y desde cuándo?'},
+  {title:'Inventario', icon:'box', ask:'¿Qué productos tienen pocas existencias?'},
+  {title:'Compras', icon:'invoice', ask:'¿Cuánto le debo a proveedores y a quién más?'},
+];
 const MAX_FILES = 3, MAX_BYTES = 5_000_000;
+let busy = false, attached = [], chat = [];
+try { chat = JSON.parse(sessionStorage.getItem(STORE)) || []; } catch {}
+const save = () => { try { sessionStorage.setItem(STORE, JSON.stringify(chat.slice(-40))); } catch {} };
+const recent = () => chat.filter(m => !m.failed).slice(-12).map(m => ({role:m.role, content:m.text}));
 
 const base64 = buffer => { let s = ''; const bytes = new Uint8Array(buffer); for (let i = 0; i < bytes.length; i += 32768) s += String.fromCharCode(...bytes.subarray(i, i + 32768)); return btoa(s); };
 function loadScript(src){ return window.ExcelJS ? Promise.resolve() : new Promise((ok,fail)=>{ const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = fail; document.head.append(t); }); }
@@ -41,36 +50,39 @@ function format(text){
   if (list) blocks.push('<ul>'+list.join('')+'</ul>');
   return blocks.join('');
 }
-
 function evidence(documents){
   if (!documents?.length) return '';
   const rows = documents.map(d=>'<tr><td>'+esc(d.numero)+'</td><td>'+esc(d.cliente)+'</td><td>'+esc(d.emision)+'</td><td class="num">'+esc(d.importe)+'</td></tr>').join('');
   return '<details class="agent-docs"><summary>'+documents.length+(documents.length===1?' documento de respaldo':' documentos de respaldo')+'</summary><div class="table-wrap"><table><thead><tr><th>Documento</th><th>Cliente</th><th>Emisión</th><th class="num">Importe</th></tr></thead><tbody>'+rows+'</tbody></table></div></details>';
 }
-
 function downloads(files){
   if (!files?.length) return '';
   return '<div class="agent-files">'+files.map((f,i)=>'<button type="button" data-file="'+i+'">Descargar '+(f.format==='pdf'?'PDF':'Excel')+': '+esc(f.report.title)+'</button>').join('')+'</div>';
 }
 
-function add(role, html){
-  const item = document.createElement('div');
-  item.className = 'agent-msg '+role;
-  item.innerHTML = html;
-  $('agentLog').append(item);
-  item.scrollIntoView({block:'end'});
-  return item;
+function bubble(m){
+  const row = document.createElement('div');
+  row.className = 'ora-row '+m.role+(m.failed?' failed':'')+(m.pending?' pending':'');
+  const body = m.role === 'user'
+    ? '<p>'+esc(m.text)+'</p>'+(m.files?.length?'<p class="hint">Adjuntos: '+m.files.map(esc).join(', ')+'</p>':'')
+    : m.pending ? '<p>Revisando tus datos<span class="ora-dots"><i></i><i></i><i></i></span></p>'
+    : m.failed ? '<p>'+esc(m.text)+'</p>' : format(m.text) + downloads(m.downloads) + evidence(m.documents);
+  row.innerHTML = (m.role === 'assistant' ? '<span class="ora-avatar">'+face(36, m.pending?'thinking':'')+'</span>' : '') + '<div class="agent-msg">'+body+'</div>';
+  row.querySelectorAll('[data-file]').forEach(b=>b.addEventListener('click',()=>{ const f = m.downloads[b.dataset.file]; downloadReport(f.report, f.format); }));
+  return row;
 }
-
-function welcome(){
-  if ($('agentLog').children.length) return;
-  const box = add('assistant','<p>Pregunta en tus palabras. Respondo con las cifras de tu ERP para el período que estás viendo y te muestro las facturas que las forman.</p><div class="agent-suggestions"></div>');
-  for (const text of suggestions) {
-    const b = document.createElement('button');
-    b.type = 'button'; b.textContent = text;
-    b.addEventListener('click',()=>{ $('agentInput').value = text; send(); });
-    box.querySelector('.agent-suggestions').append(b);
+function render(){
+  const log = $('agentLog');
+  log.replaceChildren();
+  if (!chat.length) {
+    log.innerHTML = '<div class="ora-empty">'+face(112,'waving')+'<h2>Hola, soy Ora</h2><p>Pregúntame en tus palabras. Leo tu ERP en vivo para el período que estás viendo, te respondo con cifras exactas y te muestro las facturas que las forman. También preparo Excel y PDF, y leo los archivos que me adjuntes.</p>'+
+      '<div class="ora-topics">'+topics.map((t,i)=>'<button type="button" data-topic="'+i+'"><b><i data-icon="'+t.icon+'"></i>'+t.title+'</b><span>'+esc(t.ask)+'</span></button>').join('')+'</div></div>';
+    log.querySelectorAll('[data-topic]').forEach(b=>b.addEventListener('click',()=>{ $('agentInput').value = topics[b.dataset.topic].ask; send(); }));
+    document.dispatchEvent(new CustomEvent('ora:icons', {detail:log}));
+    return;
   }
+  for (const m of chat) log.append(bubble(m));
+  log.lastElementChild?.scrollIntoView({block:'end'});
 }
 
 async function send(){
@@ -78,37 +90,53 @@ async function send(){
   if (!question || busy) return;
   busy = true; $('agentSend').disabled = true; $('agentInput').value = '';
   const files = attached; attached = []; showAttached();
-  add('user','<p>'+esc(question)+'</p>'+(files.length?'<p class="hint">Adjuntos: '+files.map(f=>esc(f.name)).join(', ')+'</p>':''));
-  const pending = add('assistant pending','<p>Revisando tus datos…</p>');
+  const prior = recent();
+  chat.push({role:'user', text:question, files:files.map(f=>f.name)});
+  const answer = {role:'assistant', pending:true};
+  chat.push(answer); render();
   try {
     const res = await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question,month:$('period').value,history,files}),signal:AbortSignal.timeout(180000)});
+      body:JSON.stringify({question,month:$('period').value,history:prior,files}),signal:AbortSignal.timeout(180000)});
     const data = await res.json().catch(()=>({error:'Respuesta inesperada del servidor.'}));
     if (!res.ok) throw new Error(data.error || 'No se pudo responder.');
-    pending.classList.remove('pending');
-    pending.innerHTML = format(data.answer) + downloads(data.files) + evidence(data.documents);
-    pending.querySelectorAll('[data-file]').forEach(b=>b.addEventListener('click',()=>{ const f = data.files[b.dataset.file]; downloadReport(f.report, f.format); }));
-    history.push({role:'user',content:question},{role:'assistant',content:data.answer});
+    Object.assign(answer, {pending:false, text:data.answer, documents:data.documents, downloads:data.files});
   } catch (e) {
-    pending.classList.remove('pending'); pending.classList.add('failed');
-    pending.innerHTML = '<p>'+esc(e.name==='TimeoutError'?'La consulta tardó demasiado. Intenta con una pregunta más concreta.':e.message)+'</p>';
+    Object.assign(answer, {pending:false, failed:true, text:e.name==='TimeoutError'?'La consulta tardó demasiado. Intenta con una pregunta más concreta.':e.message});
   } finally {
-    busy = false; $('agentSend').disabled = false; $('agentInput').focus();
+    busy = false; $('agentSend').disabled = false; save(); render(); $('agentInput').focus();
   }
 }
 
-if ($('agentOpen') && !$('agentOpen').hidden) {
-  $('agentOpen').addEventListener('click',()=>{ $('agent').showModal(); welcome(); $('agentInput').focus(); });
-  $('agentClose').addEventListener('click',()=>$('agent').close());
+function open(show){
+  document.body.dataset.section = show ? 'ora' : '';
+  $('oraView').hidden = !show;
+  if (!show) return;
+  document.querySelectorAll('#sidebar nav button').forEach(b=>b.classList.toggle('active', b.dataset.section==='ora'));
+  $('oraPeriod').textContent = 'Período: '+($('period').selectedOptions[0]?.text ?? '');
+  window.history.replaceState(null, '', '#ora');
+  render(); $('agentInput').focus();
+}
+
+const entry = document.querySelector('[data-section="ora"]');
+if (entry && !entry.hidden) {
+  entry.addEventListener('click',()=>open(true));
+  document.querySelectorAll('[data-module]').forEach(b=>b.addEventListener('click',()=>{ if (document.body.dataset.section==='ora') { open(false); window.history.replaceState(null,'',location.pathname+location.search); } }));
+  document.addEventListener('click',e=>{ if (e.target.closest('[data-ask-ora]')) open(true); });
+  $('oraReset').addEventListener('click',()=>{ chat = []; save(); render(); $('agentInput').focus(); });
   $('agentForm').addEventListener('submit',e=>{ e.preventDefault(); send(); });
   $('agentFiles').addEventListener('change',async e=>{
     for (const file of e.target.files) {
       if (attached.length >= MAX_FILES) break;
-      if (file.size > MAX_BYTES) { add('assistant failed','<p>'+esc(file.name)+' supera 5 MB.</p>'); continue; }
-      try { attached.push(await readFile(file)); } catch { add('assistant failed','<p>No se pudo leer '+esc(file.name)+'.</p>'); }
+      if (file.size > MAX_BYTES) { alertFile(file.name+' supera 5 MB.'); continue; }
+      try { attached.push(await readFile(file)); } catch { alertFile('No se pudo leer '+file.name+'.'); }
     }
     e.target.value = ''; showAttached();
   });
   $('agentAttached').addEventListener('click',e=>{ const b = e.target.closest('[data-remove]'); if (b) { attached.splice(+b.dataset.remove,1); showAttached(); } });
   $('agentInput').addEventListener('keydown',e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  $('agentInput').addEventListener('input',e=>{ e.target.style.height = 'auto'; e.target.style.height = Math.min(160, e.target.scrollHeight)+'px'; });
+  if (location.hash === '#ora') open(true);
+} else {
+  document.documentElement.classList.add('no-ora');
 }
+function alertFile(text){ chat.push({role:'assistant', failed:true, text}); render(); }

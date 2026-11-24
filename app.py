@@ -22,7 +22,7 @@ DATABASE = Path(os.getenv("ORA_DATA_DIR", ROOT / "data")) / "andina.sqlite3"
 ASSETS = {"/": ("index.html","text/html"), "/style.css": ("style.css","text/css"),
           "/portal.js": ("portal.js","text/javascript"), "/metrics.js": ("metrics.js","text/javascript")}
 
-for module in ("agent.js","boot.js","inventory.js","theme.js","filters.js","customers.js","map.js","reports.js","exports.js","tour.js","restock.js"):
+for module in ("agent.js","ora.js","boot.js","inventory.js","theme.js","filters.js","customers.js","map.js","reports.js","exports.js","tour.js","restock.js"):
     ASSETS["/" + module] = (module, "text/javascript")
 BOUNDARY = "cartography/VEN-ADM1-9469f09.geojson"
 ASSETS["/" + BOUNDARY] = (BOUNDARY, "application/geo+json")
@@ -57,9 +57,10 @@ LOGIN_MESSAGES = {
     "conexion": "Odoo no pudo validar el acceso. Inténtalo de nuevo más tarde.",
 }
 ASSETS["/login.js"] = ("login.js","text/javascript")
-for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json")):
+for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json"),
+                   *((f"ora/{n}.webp","image/webp") for n in ("ora","ora-128","ora-pensando","ora-pensando-128"))):
     ASSETS["/" + name] = (name, mime)
-PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest")
+PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest","/ora/ora.webp")
 LOG = logging.getLogger("ora")
 AGENT_PLANS = {"intermedio","avanzado"}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
@@ -144,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
         if not user:
             return answer(401, "Tu sesión terminó. Vuelve a iniciar sesión.")
         if PLAN not in AGENT_PLANS:
-            return answer(403, "El agente está incluido en los planes Gestión y Dirección.")
+            return answer(403, "Ora está incluida en los planes Gestión y Dirección.")
         if not SESSIONS.attempt("agent:"+user, 20):
             return answer(429, "Hiciste muchas preguntas seguidas. Espera unos minutos.")
         try:
@@ -332,7 +333,7 @@ class Handler(BaseHTTPRequestHandler):
                          '<strong id="company">ORA</strong>': f'<strong id="company">{escape(account.company)}</strong>' if account else None,
                          '<span class="badge"></span>': f'<span class="badge">{"Odoo" if SALES_MONTH else "Demo"} · {plan_name}</span>',
                          '<body>': '<body data-live="1">' if SALES_MONTH else None,
-                         '<button id="agentOpen" hidden': '<button id="agentOpen"' if PLAN in AGENT_PLANS and AGENT_READY else None}
+                         '<button data-section="ora" hidden>': '<button data-section="ora">' if PLAN in AGENT_PLANS and AGENT_READY else None}
                 for marker, value in fills.items():
                     if value:
                         content = content.replace(marker.encode(), value.encode())

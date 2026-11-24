@@ -185,7 +185,7 @@ class LoginTests(unittest.TestCase):
         with patch.dict("os.environ",{},clear=True):
             status,data=self.agent_request(cookie,question)
         self.assertEqual(status,503)
-        self.assertIn("no está configurado",data["error"])
+        self.assertIn("no está configurada",data["error"])
         with patch("app.ask",return_value=("Vendiste USD 8.056,00.",[{"numero":"FAC-26-10030"}],["ventas"],{"input":1,"output":1})):
             status,data=self.agent_request(cookie,question)
         self.assertEqual((status,data["answer"],data["documents"][0]["numero"]),(200,"Vendiste USD 8.056,00.","FAC-26-10030"))

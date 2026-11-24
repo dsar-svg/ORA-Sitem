@@ -669,3 +669,114 @@ th button{display:inline-flex;align-items:center;gap:4px}
 .agent-chip button:after{content:"";position:absolute;inset:4px;background:var(--muted);-webkit-mask:var(--ico-x) center/contain no-repeat;mask:var(--ico-x) center/contain no-repeat}
 .agent-files{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .agent-files button{background:var(--fill);color:var(--on-fill);border-radius:8px;padding:8px 12px;font-weight:650;font-size:14px}
+
+/* ===== Identidad Ora: un personaje cálido con color mango; el resto de la interfaz queda sobria ===== */
+:root{--paper:#fbf8f4;--ink:#221e2b;--muted:#625b66;--line:#ece6df;--tint:#f5efe8;--data:#2c2734;
+  --plum:#b4520a;--fill:#f07a1a;--on-fill:#221e2b;--peach:#8f857c;--ora:#f07a1a;--nav-active:color-mix(in srgb,var(--fill) 13%,#fff)}
+.ora-face .ora-head{fill:var(--ora,#f07a1a)}
+.ora-face .ora-eyes{fill:#221e2b;transform-box:fill-box;transform-origin:center;animation:ora-blink 5.5s infinite}
+.ora-face .ora-mouth{fill:none;stroke:#221e2b;stroke-width:4;stroke-linecap:round}
+.ora-face .ora-cheek{fill:#fff;fill-opacity:.35}
+@keyframes ora-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+.ora-face.thinking .ora-eyes{animation:ora-look 1.6s ease-in-out infinite}
+.ora-face.thinking .ora-mouth{d:path("M26 42.5h12")}
+@keyframes ora-look{0%,100%{transform:translate(0,0)}50%{transform:translate(3px,-3px)}}
+.ora-face.waving{animation:ora-hello 2.4s ease-in-out 1}
+@keyframes ora-hello{0%,100%{transform:rotate(0)}20%{transform:rotate(-8deg)}40%{transform:rotate(6deg)}60%{transform:rotate(-4deg)}}
+@media (prefers-reduced-motion:reduce){.ora-face *,.ora-face{animation:none!important}}
+.brand{gap:10px}.brand .ora-face{flex:none}
+nav button .ora-face{flex:none;margin:-1px 0}
+/* Ora's line on each report */
+.ora-says{display:flex;align-items:center;gap:12px;margin:0 0 14px;background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;font-size:15.5px}
+.ora-says span{flex:1;min-width:0}.ora-says .ora-face{flex:none}
+.ora-says .link{white-space:nowrap;font-size:14.5px}
+/* Ora's page */
+body[data-section=ora] .page{display:none}
+#oraView{display:flex;flex-direction:column;gap:12px;max-width:980px;width:100%;margin:0 auto;padding:12px clamp(16px,2.6vw,36px) 20px;height:calc(100dvh - 70px)}
+#oraView[hidden]{display:none}
+.ora-head-bar{display:flex;align-items:center;gap:14px;background:var(--white);border:1px solid var(--line);border-radius:16px;padding:14px 18px}
+.ora-head-bar h1{font-size:24px;margin:0;letter-spacing:-.01em}.ora-head-bar p{margin:2px 0 0;color:var(--muted);font-size:14.5px}
+.ora-head-bar>div{flex:1;min-width:0}
+.ora-period{font-size:13.5px;color:var(--muted);white-space:nowrap}
+.ora-log{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:6px 2px}
+.ora-row{display:flex;gap:10px;align-items:flex-end;max-width:88%}
+.ora-row.user{align-self:flex-end}
+.ora-row .agent-msg{max-width:100%;font-size:15.5px;line-height:1.55}
+.ora-row.user .agent-msg{background:var(--nav-active);border-radius:16px 16px 4px 16px;padding:10px 14px}
+.ora-row.assistant .agent-msg{background:var(--white);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:12px 16px}
+.ora-row.failed .agent-msg{color:#b3261e}
+.ora-row .ora-avatar{flex:none}
+.ora-dots{display:inline-flex;gap:3px;margin-left:6px}.ora-dots i{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:ora-dot 1.2s infinite}
+.ora-dots i:nth-child(2){animation-delay:.2s}.ora-dots i:nth-child(3){animation-delay:.4s}
+@keyframes ora-dot{0%,100%{opacity:.25}50%{opacity:1}}
+.ora-empty{margin:auto;text-align:center;max-width:640px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 0}
+.ora-empty h2{font-size:clamp(26px,3vw,34px);margin:6px 0 0}.ora-empty p{color:var(--muted);margin:0;font-size:16px;line-height:1.55}
+.ora-topics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%;margin-top:14px;text-align:left}
+.ora-topics button{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:4px;transition:border-color .15s}
+.ora-topics button:hover{border-color:var(--fill)}
+.ora-topics b{display:flex;align-items:center;gap:8px;font-size:15px}.ora-topics b svg.icon{width:18px;height:18px;color:var(--plum)}
+.ora-topics span{color:var(--muted);font-size:14px;line-height:1.4}
+#oraView #agentForm{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:8px;gap:8px;align-items:flex-end}
+#oraView #agentInput{border:0;min-height:40px;padding:10px 6px;background:transparent}
+#oraView #agentInput:focus-visible{outline:none}#oraView #agentForm:focus-within{border-color:var(--fill)}
+#oraView .agent-attach{border:0;width:40px;height:40px}
+@media(max-width:800px){
+  #oraView{height:calc(100dvh - 150px);padding:8px 12px 10px}
+  .ora-head-bar{padding:10px 12px;gap:10px}.ora-head-bar p,.ora-period{display:none}.ora-head-bar .ora-face{width:40px;height:40px}
+  .ora-topics{grid-template-columns:1fr}.ora-row{max-width:96%}
+  .ora-says{font-size:14.5px;align-items:flex-start}.ora-says .link{display:none}
+}
+.ora-topics button{text-align:left}
+@media(max-width:800px){
+  #sidebar,#sidebar nav{flex-wrap:nowrap}#sidebar nav button{min-width:0}
+  nav button .ora-face{width:22px;height:22px;margin:0}
+  #oraView{height:calc(100dvh - 162px)}
+  #oraReset{padding:7px 12px;font-size:14px}
+}
+
+/* ===== Identidad Ora · Medianoche: interfaz oscura y elegante alrededor del búho; dorado solo en lo que se presiona ===== */
+:root{color-scheme:dark;--paper:#0f1220;--white:#171b2c;--nav:#12162a;--on-nav:#e9ebf2;--ink:#e9ebf2;--muted:#a2a8ba;--line:#272c43;--tint:#1e2338;
+  --data:#d9dce6;--peach:#6b7391;--data-prev:var(--peach);--plum:#f0c97a;--fill:#e3b766;--on-fill:#141a2e;--warn:#f0a35e;--good:#4fc08d;--bad:#ff8a80;
+  --nav-active:rgb(227 183 102/.14);--ora:#e3b766}
+body,aside,#sidebar{background:var(--paper)}
+aside{background:var(--nav);border-color:var(--line)}
+::selection{background:rgb(227 183 102/.35);color:var(--ink)}
+:is(button,select,summary,input,a,[tabindex]):focus-visible{outline:2px solid var(--plum)}
+.filters label:has(:focus-visible){outline-color:var(--plum)}
+td{border-bottom-color:var(--line)}
+html{scrollbar-color:#3a4160 transparent}
+.ora-face{border-radius:50%;object-fit:cover;background:#16181d;box-shadow:0 0 0 1px rgb(227 183 102/.35);flex:none}
+.ora-face.thinking{animation:ora-breathe 1.8s ease-in-out infinite}
+@keyframes ora-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.ora-empty .ora-face{box-shadow:0 0 0 2px rgb(227 183 102/.5),0 20px 60px -20px rgb(227 183 102/.45)}
+@media (prefers-reduced-motion:reduce){.ora-face{animation:none!important}}
+.ora-mark{border-radius:10px;flex:none}
+.brand{color:var(--ink)}
+nav button{color:var(--muted)}nav button:hover{background:var(--tint);color:var(--ink)}
+nav button.active{background:var(--nav-active);color:var(--plum)}
+.kpi.primary,.sales-summary .primary{background:linear-gradient(160deg,#1d2338,#171b2c 60%);border-color:#33395a}
+.kpi .source:before{background:var(--good)}
+.ora-row.failed .agent-msg,.agent-msg.failed,.sync.failed{color:var(--bad)}.sync.failed:before{background:var(--bad)}
+.sync.stale{color:var(--warn)}
+.ora-row.user .agent-msg{background:#262c47;color:var(--ink)}
+.ora-topics button:hover{border-color:var(--fill);background:#1b2034}
+.ora-says{background:linear-gradient(90deg,rgb(227 183 102/.08),var(--white) 40%)}
+/* Map: data ramp toward the surface instead of toward white */
+.map,.venezuela{background:#141829}.land{fill:var(--white);stroke:#3a4160}
+.geo-panel [data-level="0"]{--fill:#1c2133}
+.geo-panel [data-level="1"]{--fill:var(--fill);--label:#141a2e}
+.geo-panel [data-level="2"]{--fill:color-mix(in srgb,var(--fill) 70%,var(--white));--label:#141a2e}
+.geo-panel [data-level="3"]{--fill:color-mix(in srgb,var(--fill) 42%,var(--white));--label:var(--ink)}
+.geo-panel [data-level="4"]{--fill:color-mix(in srgb,var(--fill) 20%,var(--white));--label:var(--ink)}
+/* Login */
+.login-identity{background:linear-gradient(160deg,#1a2036,#0f1220);color:var(--ink)}
+.login-identity .brand{color:var(--ink)}
+.login-sheet input{background:var(--paper);color:var(--ink);border-color:var(--line)}
+input,select,textarea{color:var(--ink)}
+.choices,.profile-menu,.export-menu>div,dialog{background:var(--white);color:var(--ink);border-color:var(--line)}
+.dialog-head button,#navOpen,#navClose{background:var(--tint);color:var(--ink)}
+.track{background:#262c43}
+.comparison,.trend .comparison,.detailsum{background:var(--tint);color:var(--ink)}
+body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--muted)}
+.login-identity p strong{color:var(--plum)}
+.login-ora{display:block;width:min(220px,55%);height:auto;aspect-ratio:1;margin:auto;border-radius:50%;box-shadow:0 0 0 2px rgb(227 183 102/.45),0 30px 80px -30px rgb(227 183 102/.5)}
