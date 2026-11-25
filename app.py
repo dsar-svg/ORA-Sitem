@@ -16,6 +16,7 @@ from demo import Demo
 from odoo_sales import CARACAS, Reader, sales_report
 from datetime import date, datetime
 from model import SCHEMA, read_model, sync
+from inventory_view import slim_inventory, cut_moves
 from agent import ATTACHMENT_TYPES, Book, AgentUnavailable, ask
 import calendar
 
@@ -284,6 +285,38 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/restock.js" and "inventory" not in PLANS[PLAN]:
             self.reply(403)
             return
+        if path == "/api/moves":
+            if "inventory" not in PLANS[PLAN]:
+                self.reply(403)
+                return
+            options = parse_qs(urlsplit(self.path).query)
+            month, cut = options.get("month",[""])[0], options.get("cut",[""])[0]
+            if not cut or len(cut) > 200:
+                self.reply(400)
+                return
+            if SALES_MONTH:
+                if not self.report_month(month):
+                    self.reply(400)
+                    return
+                key = (account.login, ERP.company_id, month, "inventory")
+                try:
+                    report = REPORTS.get(key)
+                    if report is None:
+                        report = sales_report(ERP.host, account, month, "inventory")
+                        REPORTS.put(key, report, month < datetime.now(CARACAS).date().isoformat()[:7])
+                except LoginDenied:
+                    self.reply(401)
+                    return
+                except PermissionError:
+                    self.reply(403)
+                    return
+                except ProviderUnavailable:
+                    self.reply(502)
+                    return
+            else:
+                report = read_model(DATABASE, include_inventory=True)
+            self.reply(200, json.dumps(cut_moves(report, cut), ensure_ascii=False).encode(), "application/json")
+            return
         if path in ("/api/report","/api/demo"):  # /api/demo kept for pages loaded before the rename
             if SALES_MONTH:
                 options = parse_qs(urlsplit(self.path).query)
@@ -323,7 +356,8 @@ class Handler(BaseHTTPRequestHandler):
                     report.pop("product_cost", None)  # margin belongs to Gestión and Dirección
                 if view:
                     report.update(modules=PLANS[PLAN],firstMonth=earliest,lastMonth=latest)
-                body = json.dumps(report).encode()
+                # Inventory leaves daily rows and move lists on the server; the browser asks /api/moves per product.
+                body = json.dumps(slim_inventory(report) if view == "inventory" else report).encode()
                 # Inventory snapshots carry one row per product, warehouse and day; JSON compresses ~15x.
                 if "gzip" in self.headers.get("Accept-Encoding",""):
                     self.reply(200, gzip.compress(body, 6), "application/json", **{"Content-Encoding":"gzip","Vary":"Accept-Encoding"})
@@ -349,6 +383,8 @@ class Handler(BaseHTTPRequestHandler):
                 model["history"] = {"start":h["start_date"],"through":h["through_date"],
                                     "opening":bool(h["zero_opening"]),"applications":bool(h["applications_complete"])}
             model.update(modules=modules, plan=PLAN)
+            if "inventory" in modules:
+                model = slim_inventory(model)
             content = json.dumps(model, ensure_ascii=False).encode()
             mime = "application/json"
         elif path in ASSETS:

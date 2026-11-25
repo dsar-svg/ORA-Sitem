@@ -22,13 +22,14 @@ export function suggestions(data,options){
   const periods=monthsEnding(options.period,options.months);
   const cuts=new Map(data.stock_cut.map(c=>[JSON.stringify([c.product,c.warehouse,c.period]),c]));
   const policies=new Map(data.stock_policy.map(p=>[p.cut,p]));
-  const observed=new Map();
+  // Availability arrives as counts per cut (stock_avail) from the server; daily rows (stock_day) still work.
+  const observed=new Map(),counted=new Map((data.stock_avail??[]).map(a=>[a.cut,a]));
   for(const row of data.stock_day||[]){
     if(!observed.has(row.cut))observed.set(row.cut,new Map());
     observed.get(row.cut).set(row.posted,row.availability);
   }
-  const sales=new Map();
-  for(const m of data.stock_move){
+  const sales=new Map(data.stock_cut.filter(c=>c.out!==undefined).map(c=>[c.id,c.out]));
+  for(const m of data.stock_move??[]){
     if(m.kind==='sale'||m.kind==='return')sales.set(m.cut,(sales.get(m.cut)||0)-m.units);
   }
   const articles=new Map(data.article.map(a=>[a.product,a]));
@@ -49,7 +50,13 @@ export function suggestions(data,options){
     const observations=[];
     for(const cut of hist){
       if(!cut)continue;
-      const daily=observed.get(cut.id);
+      const daily=observed.get(cut.id),count=counted.get(cut.id);
+      if(count&&!daily){
+        // Counts stand in for the days: missing days stay undefined so an incomplete month is still incomplete.
+        const known=[...Array(count.full).fill('full'),...Array(count.partial).fill('partial'),...Array(count.out).fill('out')];
+        for(let d=0;d<coveredDays(cut.period);d++)observations.push(known[d]);
+        continue;
+      }
       for(let d=1;d<=coveredDays(cut.period);d++){
         observations.push(daily?.get(cut.period+'-'+String(d).padStart(2,'0')));
       }

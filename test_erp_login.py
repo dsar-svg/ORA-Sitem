@@ -191,3 +191,16 @@ class LoginTests(unittest.TestCase):
         with patch("app.ask",return_value=("Vendiste USD 8.056,00.",[{"numero":"FAC-26-10030"}],["ventas"],{"input":1,"output":1})):
             status,data=self.agent_request(cookie,question)
         self.assertEqual((status,data["answer"],data["documents"][0]["numero"]),(200,"Vendiste USD 8.056,00.","FAC-26-10030"))
+
+    def test_inventory_moves_on_demand(self):
+        cookie=self.login()[1]["Set-Cookie"].split(";")[0]
+        report=json.loads(self.request("/api/report",cookie=cookie)[2])
+        self.assertNotIn("stock_move",report)
+        self.assertNotIn("stock_day",report)
+        cut=report["stock_cut"][0]
+        self.assertIn("out",cut)
+        status,_,body=self.request("/api/moves?month="+cut["period"]+"&cut="+cut["id"],cookie=cookie)
+        moves=json.loads(body)
+        self.assertEqual((status,len(moves)),(200,cut["moves"]))
+        self.assertTrue(all(m["cut"]==cut["id"] for m in moves))
+        self.assertEqual(self.request("/api/moves?cut="+cut["id"])[0],401)

@@ -4,17 +4,21 @@ const types = {sale:'Salida por venta',return:'Devolución de cliente',receipt:'
 const sort = {key:'turns',direction:-1};
 const columns = [['sku','SKU'],['name','Producto'],['warehouseName','Almacén'],['closing','Existencias'],['out','Salidas netas'],['turns','Rotación'],['status','Estado']];
 
+// The server (inventory_view.py) sends out, sold and mean per cut; the local arithmetic stays for tests and old payloads.
 export function calculateStock(cut,moves,days){
-  const daily = Array(days).fill(0);
-  let out = 0, sold = 0;
-  for(const m of moves){
-    daily[Number(m.posted.slice(-2))-1] += m.units;
-    if(m.kind==='sale') sold -= m.units;
-    if(m.kind==='sale' || m.kind==='return') out -= m.units;
+  let {out,sold,mean}=cut;
+  if(out===undefined){
+    const daily = Array(days).fill(0);
+    out = 0; sold = 0;
+    for(const m of moves){
+      daily[Number(m.posted.slice(-2))-1] += m.units;
+      if(m.kind==='sale') sold -= m.units;
+      if(m.kind==='sale' || m.kind==='return') out -= m.units;
+    }
+    let balance = cut.opening, total = 0;
+    for(const delta of daily){balance += delta;total += balance}
+    mean = cut.opening == null || balance !== cut.closing ? null : total/days;
   }
-  let balance = cut.opening, total = 0;
-  for(const delta of daily){balance += delta;total += balance}
-  const mean = cut.opening == null || balance !== cut.closing ? null : total/days;
   const turns = mean > 0 ? out/mean : null;
   const tags = [];
   if(cut.closing<=0) tags.push('Agotado');
@@ -68,17 +72,25 @@ export function renderInventory(data,filters,ui){
   const articles=new Map(data.article.map(a=>[a.product,a]));
   const stores=new Map(data.warehouse.map(w=>[w.id,w.name]));
   const byCut=new Map();
-  for(const move of data.stock_move){
+  for(const move of data.stock_move??[]){
     if(!byCut.has(move.cut)) byCut.set(move.cut,[]);
     byCut.get(move.cut).push(move);
   }
   const rows=data.stock_cut.filter(c=>c.period===period && (!warehouse||c.warehouse===warehouse) &&
     (!product||c.product===product) && (!category||articles.get(c.product).category===category)).map(c=>({
-    ...calculateStock(c,byCut.get(c.id)??[],Number(end.slice(-2))),...articles.get(c.product),
+    ...calculateStock(c,byCut.get(c.id)??[],Number(end.slice(-2))),moves:byCut.get(c.id)??(c.moves===undefined?[]:undefined),...articles.get(c.product),
     name:products.get(c.product),warehouseName:stores.get(c.warehouse)
   }));
   if(filters.view==='abc') return abc(rows,{esc,panel,action,show,day,end,movements:r=>movements(r)});
-  function movements(r){
+  async function movements(r){
+    if(!Array.isArray(r.moves)){
+      show(r.name,'MOVIMIENTOS DE INVENTARIO','<p class="empty">Cargando movimientos…</p>');
+      try{
+        const res=await fetch('/api/moves?month='+encodeURIComponent(period)+'&cut='+encodeURIComponent(r.id));
+        if(!res.ok)throw Error();
+        r.moves=await res.json();
+      }catch{show(r.name,'MOVIMIENTOS DE INVENTARIO','<p class="empty">No se pudieron cargar los movimientos. Intenta de nuevo.</p>');return}
+    }
     const sorted=[...r.moves].sort((a,b)=>a.posted.localeCompare(b.posted));
     const body='<p>'+esc(r.warehouseName)+' · '+esc(r.sku)+' · Corte '+day(end)+'</p>'+
       '<p>Apertura: '+(r.opening==null?'sin registro':fmt(r.opening))+' '+esc(r.unit)+' · Cierre: '+fmt(r.closing)+' '+esc(r.unit)+
