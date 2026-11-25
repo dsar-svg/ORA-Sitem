@@ -835,3 +835,5 @@ input,select,textarea{color:var(--ink)}
 @keyframes ora-corner{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.6);opacity:.55}}
 .ora-empty .ora-face.mark{box-shadow:0 0 0 6px color-mix(in srgb,var(--gold) 22%,transparent)}
 @media (prefers-reduced-motion:reduce){.ora-face.mark .corner{animation:none!important}}
+.abc{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:4px;font-weight:700;font-size:13px}
+.abc-A{background:var(--data);color:var(--white)}.abc-B{background:color-mix(in srgb,var(--data) 35%,var(--white));color:var(--ink)}.abc-C{background:var(--tint);color:var(--muted)}

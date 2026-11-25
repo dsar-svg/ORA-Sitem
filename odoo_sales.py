@@ -167,17 +167,7 @@ def profiles(reader,data):
         located = bool(lat or lon)
         data["location"].append(dict(customer=cid,zone=r["city"] or None,latitude=float(lat) if located else None,
                                      longitude=float(lon) if located else None,precision="point"))
-    # Credit limits are company-dependent, denominated in the company currency.
-    try:
-        companies = reader.call("res.company","search_read",dict(domain=[["id","=",reader.account.company_id]],
-                                fields=["currency_id"],limit=1))
-        if companies:
-            currency = companies[0]["currency_id"][1]
-            for r in reader.related("res.partner","credit_limit",ids,shared=True):
-                if r["credit_limit"]>0:
-                    data["credit_line"].append(dict(customer=str(r["id"]),currency=currency,limit_cents=cents(r["credit_limit"])))
-    except PermissionError:
-        pass  # The directory also serves users without access to credit limits.
+    credit_limits(reader,data,ids)
 
 
 def tax_key(vat):
@@ -226,6 +216,20 @@ def bolivar_rate(reader,company_id,currency,end):
     return dict(rate=str(rows[0]["inverse_rate"]),date=rows[0]["name"],currency=currency)
 
 
+def credit_limits(reader,data,ids):
+    # Credit limits are company-dependent, denominated in the company currency.
+    try:
+        companies = reader.call("res.company","search_read",dict(domain=[["id","=",reader.account.company_id]],
+                                fields=["currency_id"],limit=1))
+        if companies:
+            currency = companies[0]["currency_id"][1]
+            for r in reader.related("res.partner","credit_limit",ids,shared=True):
+                if r["credit_limit"]>0:
+                    data["credit_line"].append(dict(customer=str(r["id"]),currency=currency,limit_cents=cents(r["credit_limit"])))
+    except PermissionError:
+        pass  # Users without access to credit limits still get the rest of the report.
+
+
 def sales_report(host,account,month,view=None):
     first = date.fromisoformat(month+"-01")
     start = (first-timedelta(days=1)).replace(day=1)
@@ -257,6 +261,8 @@ def sales_report(host,account,month,view=None):
         drop_group(reader,data,company_vats)
     if view=="clients":
         profiles(reader,data)
+    elif view=="ar":
+        credit_limits(reader,data,[int(c["id"]) for c in data["customer"] if c["id"]!="0"])
     if view=="inventory":
         from odoo_inventory import inventory
         inventory(reader,data,first,end,today)

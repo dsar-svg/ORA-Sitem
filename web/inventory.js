@@ -27,6 +27,40 @@ export function calculateStock(cut,moves,days){
   return {...cut,out,sold,mean,turns,status:tags.join(' · '),moves,days};
 }
 
+// Pareto by units shipped: A covers the first 80 % of net outflow, B the next 15 %, C the rest.
+export function classify(products){
+  const total=products.reduce((n,p)=>n+Math.max(0,p.out),0);
+  let running=0;
+  return [...products].sort((a,b)=>b.out-a.out).map(p=>{
+    // Class by the share already covered before this item, so the top seller is always A; rounding keeps 80 % exact.
+    const before=total?Math.round(running/total*1e6)/1e6:1;
+    running+=Math.max(0,p.out);
+    return {...p,abc:p.out<=0?'C':before<0.8?'A':before<0.95?'B':'C'};
+  });
+}
+
+function abc(rows,{esc,panel,action,show,end,day,movements}){
+  const map=new Map();
+  for(const r of rows){
+    const p=map.get(r.product)??{product:r.product,name:r.name,sku:r.sku,unit:r.unit,out:0,closing:0,rows:[]};
+    p.out+=r.out;p.closing+=r.closing;p.rows.push(r);map.set(r.product,p);
+  }
+  const items=classify([...map.values()]).map(p=>{
+    const turns=p.rows.every(r=>r.turns!=null)?p.rows.reduce((n,r)=>n+r.turns,0)/p.rows.length:null;
+    const status=p.out<=0&&p.closing>0?'Sin salidas':turns!=null&&turns<0.5&&p.closing>0?'Lento':'Activo';
+    return {...p,turns,status};
+  });
+  const count=c=>items.filter(i=>i.abc===c).length;
+  const idle=items.filter(i=>i.status!=='Activo');
+  const card=(title,value,sub)=>'<div class="kpi"><span class="kpi-name">'+title+'</span><strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span></div>';
+  const row=i=>'<tr data-a="'+action(()=>movements(i.rows[0]))+'"><td><span class="abc abc-'+i.abc+'">'+i.abc+'</span></td><td>'+esc(i.sku)+'</td><td><button class="link name-link" data-a="'+action(()=>movements(i.rows[0]))+'">'+esc(i.name)+'</button></td><td class="num">'+fmt(i.out)+' '+esc(i.unit)+'</td><td class="num">'+fmt(i.closing)+' '+esc(i.unit)+'</td><td class="num">'+rotation(i.turns)+'</td><td>'+esc(i.status)+'</td></tr>';
+  return '<div class="kpis">'+card('Clase A',count('A'),'Hacen el 80 % de las salidas')+card('Clase B',count('B'),'El siguiente 15 %')+card('Clase C',count('C'),'El 5 % restante o sin salidas')+'</div>'+
+    panel('Inventario lento o sin salidas','Productos con existencias que rotan menos de 0,5 vueltas o no tuvieron despachos al '+day(end),
+      idle.length?'<div class="table-wrap"><table><thead><tr><th>Clase</th><th>SKU</th><th>Producto</th><th class="num">Salidas</th><th class="num">Existencias</th><th class="num">Rotación</th><th>Estado</th></tr></thead><tbody>'+idle.map(row).join('')+'</tbody></table></div>':'<p class="empty">Todo el inventario con existencias tuvo movimiento.</p>')+
+    panel('Clasificación ABC','Por unidades despachadas en el mes · Selecciona un producto para ver sus movimientos',
+      '<div class="table-wrap"><table><thead><tr><th>Clase</th><th>SKU</th><th>Producto</th><th class="num">Salidas</th><th class="num">Existencias</th><th class="num">Rotación</th><th>Estado</th></tr></thead><tbody>'+items.map(row).join('')+'</tbody></table></div>');
+}
+
 export function renderInventory(data,filters,ui){
   const {esc,action,panel,show,refresh,day} = ui;
   const {period,warehouse,category,product,end} = filters;
@@ -43,6 +77,7 @@ export function renderInventory(data,filters,ui){
     ...calculateStock(c,byCut.get(c.id)??[],Number(end.slice(-2))),...articles.get(c.product),
     name:products.get(c.product),warehouseName:stores.get(c.warehouse)
   }));
+  if(filters.view==='abc') return abc(rows,{esc,panel,action,show,day,end,movements:r=>movements(r)});
   function movements(r){
     const sorted=[...r.moves].sort((a,b)=>a.posted.localeCompare(b.posted));
     const body='<p>'+esc(r.warehouseName)+' · '+esc(r.sku)+' · Corte '+day(end)+'</p>'+

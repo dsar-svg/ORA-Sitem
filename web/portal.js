@@ -75,7 +75,7 @@ function reportTabs(salesMode,statementMode){
   const inv=moduleName==='inventory'&&data.modules.includes('inventory');
   $('reportBar').hidden=!salesMode && moduleName!=='ar'&&!inv;
   $('restockControls').hidden=!inv||inventoryTab!=='restock';
-  const pair=inv?[['summary','Existencias'],['restock','Reposición']]:salesMode?[['summary','Resumen'],['docs','Documentos']]:[['summary','Resumen'],['statement','Estados de cuenta']];
+  const pair=inv?[['summary','Existencias'],['abc','Análisis ABC'],['restock','Reposición']]:salesMode?[['summary','Resumen'],['docs','Documentos']]:[['summary','Resumen'],['collections','Cobranza'],['statement','Estados de cuenta']];
   const active=inv?inventoryTab:salesMode?salesTab:arTab;
   $('reportBar').firstElementChild.innerHTML=pair.map(([id,name])=>'<button data-view="'+id+'" aria-pressed="'+(id===active)+'">'+name+'</button>').join('');
   $('viewExport').innerHTML=salesMode||moduleName==='ar'||(inv&&inventoryTab==='restock')?exportMenu('view'):'';
@@ -121,6 +121,37 @@ function provenance(cents){
 }
 function panel(title,sub,body){return '<article class="panel"><h2>'+title+'</h2><p class="hint">'+esc(sub)+'</p>'+body+'</article>'}
 function dot(color){return '<i class="dot" style="background:'+color+'"></i>'}
+// Cobranza: when the open balance should come in, how long collection takes and who is past their limit.
+function renderCollections(filtered,rows,late,upcoming,period){
+  const end=lastDay(),cut=new Date(end+'T00:00:00Z'),curr=$('currency').value;
+  const weeks=[['Vencido: cobrar ya',d=>d.days>0],['Próximos 7 días',d=>d.days>-7&&d.days<=0],['Días 8 a 14',d=>d.days>-14&&d.days<=-7],['Días 15 a 30',d=>d.days>-30&&d.days<=-14],['Más de 30 días',d=>d.days<=-30]];
+  const open=rows.filter(d=>!d.payment&&d.value>0);
+  const bands=weeks.map(([name,test])=>({name,docs:open.filter(test)})),max=Math.max(1,...bands.map(b=>sum(b.docs)));
+  const days=Number(end.slice(-2)),billed=filtered.filter(d=>d.sign===1&&d.issued.startsWith(period)).reduce((n,d)=>n+(d.gross??gross(d)),0);
+  const dso=billed>0?Math.round(sum(rows)/billed*days):null;
+  const limits=new Map(data.credit_line.filter(l=>l.currency===curr).map(l=>[l.customer,l.limit_cents]));
+  const risk=groups(rows,'customer').map(g=>{
+    const due=sum(g.docs.filter(overdue)),limit=limits.get(g.name),soldNow=filtered.some(d=>d.customer===g.name&&d.sign===1&&d.issued.startsWith(period));
+    return {...g,client:g.docs[0].client,due,limit,over:limit!=null&&limit>0&&g.value>limit,soldNow};
+  }).filter(g=>g.over||(g.due>0&&g.soldNow)).sort((a,b)=>b.value-a.value);
+  const reason=g=>[g.over?'Supera su límite':'',g.due>0&&g.soldNow?'Tiene vencido y se le facturó este mes':''].filter(Boolean).join(' · ');
+  const cards=kpi('Por cobrar en 30 días',money(sum(open.filter(d=>d.days>-30&&d.days<=0))),'Facturas que vencen en los próximos 30 días','calendar',open.filter(d=>d.days>-30&&d.days<=0),true)+
+    kpi('Días de cobro',dso==null?'Sin base':dso+' días',dso==null?'No hubo facturación en el mes':'Saldo pendiente frente a lo facturado en '+monthName(period),'clock',rows)+
+    kpi('Clientes en riesgo',String(risk.length),'Sobre su límite o con vencido y compras nuevas','wallet',risk.flatMap(g=>g.docs));
+  const forecast=panel('Pronóstico de cobranza','Saldo abierto por fecha de vencimiento desde el '+day(end)+' · Selecciona un tramo para ver sus facturas',
+    bands.map((b,i)=>horizontal(b.name,money(sum(b.docs))+' · '+b.docs.length+' doc.',sum(b.docs),max,drill(b.name,b.docs),i===0)).join(''));
+  const riskTable=panel('Clientes en riesgo de crédito','Saldo frente al límite de crédito y facturación del mes · Selecciona un cliente para ver su cartera',
+    risk.length?'<div class="table-wrap"><table><thead><tr><th>Cliente</th><th class="num">Saldo</th><th class="num">Límite</th><th class="num">Vencido</th><th>Motivo</th></tr></thead><tbody>'+
+      risk.map(g=>{const open=drill(g.client,g.docs);return '<tr data-a="'+open+'"><td><button class="link name-link" data-a="'+open+'">'+esc(g.client)+'</button></td><td class="num">'+money(g.value)+'</td><td class="num">'+(g.limit!=null?money(g.limit):'Sin límite')+'</td><td class="num">'+money(g.due)+'</td><td>'+esc(reason(g))+'</td></tr>'}).join('')+
+      '</tbody></table></div>':'<p class="empty">Ningún cliente supera su límite ni compra con saldo vencido.</p>');
+  viewReport={...context('Cobranza','Corte '+day(end)),summary:[['Por cobrar en 30 días',sum(open.filter(d=>d.days>-30&&d.days<=0))],['Saldo vencido',sum(late)]],
+    tables:[{name:'Pronóstico',headers:['Tramo','Documentos','Importe'],amounts:[2],rows:bands.map(b=>[b.name,b.docs.length,sum(b.docs)])},
+      {name:'Clientes en riesgo',headers:['Cliente','Saldo','Límite','Vencido','Motivo'],amounts:[1,2,3],rows:risk.map(g=>[g.client,g.value,g.limit??0,g.due,reason(g)])}],
+    charts:[barChart('Pronóstico de cobranza',bands.map(b=>({name:b.name,value:sum(b.docs)})))]};
+  const worst=risk[0];
+  const says=(dso==null?'':'Cobras en promedio a '+dso+' días. ')+(worst?worst.client+' está en riesgo: '+reason(worst).toLowerCase()+'.':'Ningún cliente está en riesgo de crédito.');
+  $('dashboard').innerHTML='<p class="ora-says">'+face(30)+'<span>'+esc(says)+'</span></p><div class="kpis">'+cards+'</div><div class="panels">'+forecast+'</div>'+riskTable;
+}
 function lastDay(){if(data.cutoff)return data.cutoff;const d=monthDate($('period').value);d.setUTCMonth(d.getUTCMonth()+1,0);return d.toISOString().slice(0,10)}
 const bounds=[5,10,15,20,25,31];
 const slices=rows=>bounds.map((end,i)=>rows.filter(r=>+r.issued.slice(-2)<=end && +r.issued.slice(-2)>(bounds[i-1]||0)));
@@ -224,7 +255,7 @@ function render(){
         'Plazo: '+(opts.lead??'según producto'),'Seguridad: '+(opts.safety??'según producto')].join(' · ')),currency:null,summary:r.summary,tables:r.tables,note:'Sugerencias para revisión humana.'};
       return;
     }
-    $('dashboard').innerHTML=renderInventory(data,{period,end:lastDay(),warehouse:$('warehouse').value,category:$('category').value,product:$('stockProduct').value},{esc,action,panel,show:showDetail,refresh:render,day});
+    $('dashboard').innerHTML=renderInventory(data,{view:inventoryTab,period,end:lastDay(),warehouse:$('warehouse').value,category:$('category').value,product:$('stockProduct').value},{esc,action,panel,show:showDetail,refresh:render,day});
     return;
   }
   let cards,panels,table,hero,evolution,says='';
@@ -283,6 +314,7 @@ function render(){
       return;
     }
     const rows=balances(filtered,lastDay()),late=rows.filter(overdue),upcoming=rows.filter(d=>d.days<=0&&!d.payment),unapplied=rows.filter(d=>d.payment);
+    if(arTab==='collections'){renderCollections(filtered,rows,late,upcoming,period);return}
     const unit=data.firstMonth?' partidas':' documentos';
     const oldest=rows.filter(d=>d.bucket==='Más de 90 días');
     cards=kpi('Saldo pendiente',money(sum(rows)),rows.length+unit,'wallet',rows,true,
