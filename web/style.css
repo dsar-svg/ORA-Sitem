@@ -736,90 +736,95 @@ body[data-section=ora] .page{display:none}
 
 body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--muted)}
 
-/* ===== Identidad Ora · Índigo: claro y luminoso con barra lateral índigo; modo oscuro equivalente ===== */
-:root{color-scheme:light;--paper:#f6f8fb;--white:#ffffff;--ink:#1a1f36;--muted:#5b6478;--line:#e3e8ef;--tint:#eef2f7;
-  --data:#635bff;--peach:#c4cad6;--data-prev:var(--peach);--plum:#4b43e0;--fill:#635bff;--on-fill:#ffffff;--warn:#c2410c;--good:#0e8a5f;--bad:#c0262d;
-  --nav-active:rgb(255 255 255/.14);--side:#1c1b4b;--side-2:#2a2470;--side-ink:#d9daf5;--side-muted:#a5a7d6;
-  --card-shadow:0 0 0 1px rgb(26 31 54/.05),0 1px 2px rgb(26 31 54/.06),0 10px 28px -14px rgb(50 50 93/.22);
-  --hero:linear-gradient(135deg,#635bff 0%,#4b43e0 55%,#2e2a8c 100%)}
-:root[data-mode=dark]{color-scheme:dark;--paper:#0b0d12;--white:#12151c;--ink:#e7e9ef;--muted:#9097a8;--line:#222736;--tint:#1a1e28;
-  --data:#8b97ff;--peach:#3b4157;--plum:#a5b0ff;--fill:#6e7cff;--on-fill:#ffffff;--warn:#f5a35c;--good:#4ccb8f;--bad:#ff8a80;
-  --side:#0e1016;--side-2:#151832;--side-ink:#e7e9ef;--side-muted:#9097a8;
-  --card-shadow:0 0 0 1px rgb(255 255 255/.06),0 12px 30px -16px rgb(0 0 0/.7);--hero:linear-gradient(135deg,#4e4ad6 0%,#2f2b9a 60%,#1b1958 100%)}
-@media (prefers-color-scheme:dark){:root[data-mode=auto]{color-scheme:dark;--paper:#0b0d12;--white:#12151c;--ink:#e7e9ef;--muted:#9097a8;--line:#222736;--tint:#1a1e28;
-  --data:#8b97ff;--peach:#3b4157;--plum:#a5b0ff;--fill:#6e7cff;--on-fill:#ffffff;--warn:#f5a35c;--good:#4ccb8f;--bad:#ff8a80;
-  --side:#0e1016;--side-2:#151832;--side-ink:#e7e9ef;--side-muted:#9097a8;
-  --card-shadow:0 0 0 1px rgb(255 255 255/.06),0 12px 30px -16px rgb(0 0 0/.7);--hero:linear-gradient(135deg,#4e4ad6 0%,#2f2b9a 60%,#1b1958 100%)}}
+/* ===== Identidad ORA · Banca privada: riel azul marino sólido, cifras y títulos en serif, filete dorado; claro y oscuro ===== */
+@font-face{font-family:"Source Serif 4";src:url(/fonts/source-serif-4.woff2) format("woff2");font-weight:400 700;font-display:swap}
+:root{color-scheme:light;--serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --paper:#f3f4f6;--white:#ffffff;--ink:#0e1a2b;--muted:#5b6575;--line:#dfe3ea;--tint:#eef0f4;
+  --data:#0b2545;--peach:#c3cad6;--data-prev:var(--peach);--plum:#0b2545;--fill:#0b2545;--on-fill:#ffffff;
+  --gold:#b08d57;--warn:#9c2f2f;--good:#1f6f4a;--bad:#9c2f2f;--side:#0b1f3a;--side-ink:#e9edf4;--side-muted:#aeb9cc;--radius:4px}
+:root[data-mode=dark]{color-scheme:dark;--paper:#0a1322;--white:#101b2e;--ink:#e8ecf3;--muted:#9aa6ba;--line:#22304a;--tint:#152238;
+  --data:#c9d4e6;--peach:#3a4a66;--plum:#d8b77f;--fill:#c9a46a;--on-fill:#0b1424;--gold:#c9a46a;--warn:#f0a35e;--good:#5fc29a;--bad:#ff8f87;--side:#071020;--side-ink:#e8ecf3;--side-muted:#9aa6ba}
+@media (prefers-color-scheme:dark){:root[data-mode=auto]{color-scheme:dark;--paper:#0a1322;--white:#101b2e;--ink:#e8ecf3;--muted:#9aa6ba;--line:#22304a;--tint:#152238;
+  --data:#c9d4e6;--peach:#3a4a66;--plum:#d8b77f;--fill:#c9a46a;--on-fill:#0b1424;--gold:#c9a46a;--warn:#f0a35e;--good:#5fc29a;--bad:#ff8f87;--side:#071020;--side-ink:#e8ecf3;--side-muted:#9aa6ba}}
 body{background:var(--paper)}
-::selection{background:color-mix(in srgb,var(--fill) 28%,transparent);color:var(--ink)}
-:is(button,select,summary,input,a,[tabindex]):focus-visible{outline:2px solid var(--fill);outline-offset:2px}
+::selection{background:color-mix(in srgb,var(--gold) 35%,transparent);color:var(--ink)}
+:is(button,select,summary,input,a,[tabindex]):focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 td{border-bottom-color:var(--line)}
-/* Sidebar in brand indigo */
-aside,#sidebar{background:linear-gradient(180deg,var(--side) 0%,var(--side-2) 100%);border-right:0;color:var(--side-ink)}
-.brand{color:#fff}
-#sidebar nav button{color:var(--side-muted)}
-#sidebar nav button:hover{background:rgb(255 255 255/.07);color:#fff}
-#sidebar nav button.active{background:var(--nav-active);color:#fff;box-shadow:inset 3px 0 0 #a5a0ff}
+/* Navy rail */
+aside,#sidebar{background:var(--side);border-right:0;color:var(--side-ink);box-shadow:none}
+.brand{color:#fff;font-family:var(--serif);font-weight:600;letter-spacing:.04em}
+#sidebar nav button{color:var(--side-muted);border-radius:0;font-weight:600}
+#sidebar nav button:hover{background:rgb(255 255 255/.06);color:#fff}
+#sidebar nav button.active{background:rgb(255 255 255/.08);color:#fff;box-shadow:inset 2px 0 0 var(--gold)}
 body[data-section=ora] #sidebar nav button[data-module].active{background:transparent;color:var(--side-muted);box-shadow:none}
-#accountMenu summary{background:rgb(255 255 255/.08);color:#fff}#accountMenu summary i{color:var(--side-muted)}
-.profile-menu{background:var(--white);color:var(--ink)}
-/* Cards: soft elevation instead of outlines */
+#accountMenu summary{background:rgb(255 255 255/.08);color:#fff;border-radius:2px}#accountMenu summary i{color:var(--side-muted)}
+/* Serif for what the reader reads: page titles, panel titles and figures */
+.page h1,.ora-head-bar h1,.ora-empty h2{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
+.page h1{font-size:clamp(30px,2.6vw,38px)}
+.panel h2,.directory-title,dialog h2,.load-error h2{font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:0}
+.kpi strong,.statement-focus strong{font-family:var(--serif);font-weight:600;letter-spacing:-.005em}
+.sales-summary .primary strong{font-size:clamp(40px,3.6vw,54px)}
+/* Square white cards with hairlines; the headline card carries a gold rule */
 .panel,.trend,.directory-card,.profile-section,.kpis .kpi,.support .kpi,#dashboard>.panel,.ranking-pair .panel,.geo-panel,.client-list,.statement-breakdown,
 .kpis .kpi:not(.primary),#dashboard[data-module=inventory] .panels .panel:nth-child(2),#dashboard[data-module=ar] .panels .panel,#dashboard[data-module=inventory] .panels .panel,
-.ora-says,.ora-head-bar,.ora-topics button,#oraView #agentForm,.ora-row.assistant .agent-msg,.load-error{border:0;border-radius:14px;box-shadow:var(--card-shadow);background:var(--white)}
-.trend .panel{box-shadow:none;border-radius:0}
-.kpi:hover,.directory-card:hover{box-shadow:var(--card-shadow),0 0 0 1px color-mix(in srgb,var(--fill) 35%,transparent)}
-.panel h2,.directory-title{font-size:17px;font-weight:650;letter-spacing:-.01em}
-.icon-box{background:color-mix(in srgb,var(--fill) 12%,var(--white));color:var(--plum);border-radius:10px}
-.kpi-name{color:var(--muted);font-size:13.5px;font-weight:600}
-/* Headline card in the brand gradient */
-.kpi.primary,.sales-summary .primary{background:var(--hero);color:#fff;border:0;box-shadow:0 18px 40px -20px rgb(75 67 224/.7)}
-.kpi.primary .kpi-name,.kpi.primary .sub,.primary .sub,.kpi.primary .source,.kpi.primary .bs{color:rgb(255 255 255/.82)}
-.kpi.primary strong,.kpi.primary .recon{color:#fff}.kpi.primary .recon{border-top-color:rgb(255 255 255/.2)}
-.kpi.primary .alert{color:#ffd29c}
-.primary .icon-box{background:rgb(255 255 255/.16);color:#fff}
-.primary .cta{background:#fff;color:#2e2a8c}.primary .cta:hover{background:#eef0ff}
-.kpi .source:before{background:#4ade9b}
-/* Buttons and controls */
-.filters label,.filters>label,#secondaryFilters label,#filterToggle,.export-menu summary,.secondary{background:var(--white);border:1px solid var(--line);box-shadow:0 1px 2px rgb(26 31 54/.05)}
-.report-tabs,.client-tabs{background:var(--tint)}
-.report-tabs button[aria-pressed=true],.client-tabs [aria-selected=true]{background:var(--white);color:var(--plum)}
-.chart g:hover rect,.chart g:focus-visible rect{fill:var(--plum)}
-.track{background:var(--tint)}.track i{background:var(--data)}
+.ora-says,.ora-head-bar,.ora-topics button,#oraView #agentForm,.ora-row.assistant .agent-msg,.load-error{border:1px solid var(--line);border-radius:var(--radius);box-shadow:none;background:var(--white)}
+.trend .panel{border:0;border-radius:0;box-shadow:none}
+.kpi:hover,.directory-card:hover{border-color:color-mix(in srgb,var(--ink) 30%,var(--line));box-shadow:none;transform:none}
+.kpi.primary,.sales-summary .primary{background:var(--white);color:var(--ink);border:1px solid var(--line);border-top:2px solid var(--gold);box-shadow:none}
+.kpi.primary .kpi-name,.kpi.primary .sub,.primary .sub,.kpi.primary .source,.kpi.primary .bs{color:var(--muted)}
+.kpi.primary strong,.kpi.primary .recon{color:var(--ink)}.kpi.primary .recon{border-top-color:var(--line)}
+.kpi.primary .alert{color:var(--warn)}
+.icon-box,.primary .icon-box{background:var(--tint);color:var(--ink);border-radius:2px}
+.kpi-name{color:var(--muted);font-size:13px;font-weight:600}
+.primary .cta{background:var(--fill);color:var(--on-fill);border-radius:2px}
+.primary .cta:hover{background:color-mix(in srgb,var(--fill) 85%,#000)}
+.kpi .source:before{background:var(--good)}
+/* Controls: square, quiet; tabs are underlines */
+.filters label,.filters>label,#secondaryFilters label,#filterToggle,.export-menu summary,.secondary,#tourOffer button,#tourCard button{background:var(--white);border:1px solid var(--line);border-radius:2px;box-shadow:none}
+.report-tabs,.client-tabs{background:transparent;border-bottom:1px solid var(--line);border-radius:0;padding:0;gap:22px}
+.report-tabs button,.client-tabs button{border-radius:0;padding:8px 0;background:transparent;color:var(--muted)}
+.report-tabs button[aria-pressed=true],.client-tabs [aria-selected=true]{background:transparent;color:var(--ink);box-shadow:inset 0 -2px 0 var(--gold)}
+.chart g:hover rect,.chart g:focus-visible rect{fill:var(--gold)}
+.track{background:var(--tint);border-radius:0}.track i{background:var(--data);border-radius:0}
 .hrow.priority .track i{background:var(--warn)}
-.ora-row.failed .agent-msg,.agent-msg.failed,.sync.failed{color:var(--bad)}
-.ora-row.user .agent-msg{background:color-mix(in srgb,var(--fill) 14%,var(--white));color:var(--ink)}
-.ora-face{border-radius:50%;object-fit:cover;background:#16181d;flex:none}
+.comparison,.trend .comparison,.detailsum{background:var(--tint);color:var(--ink);border-radius:2px}
+.choices,.profile-menu,.export-menu>div,dialog{background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:4px}
+.dialog-head button,#navOpen,#navClose{background:var(--tint);color:var(--ink)}
+input,select,textarea{color:var(--ink)}
+/* Ora */
+.ora-face{border-radius:50%;object-fit:cover;background:#16181d;flex:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 55%,transparent)}
 .ora-face.thinking{animation:ora-breathe 1.8s ease-in-out infinite}
 @keyframes ora-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
-.ora-empty .ora-face{box-shadow:0 0 0 3px color-mix(in srgb,var(--fill) 35%,transparent),0 24px 60px -24px rgb(75 67 224/.55)}
+.ora-empty .ora-face{box-shadow:0 0 0 2px var(--gold),0 24px 60px -28px rgb(11 31 58/.6)}
 @media (prefers-reduced-motion:reduce){.ora-face{animation:none!important}}
-.ora-mark{border-radius:10px;flex:none}
-.ora-says{background:linear-gradient(90deg,color-mix(in srgb,var(--fill) 9%,var(--white)),var(--white) 45%)}
-#oraView #agentForm:focus-within{box-shadow:var(--card-shadow),0 0 0 2px var(--fill)}
-/* Map ramp from the brand indigo */
+.ora-mark{border-radius:6px;flex:none}
+.ora-says{background:var(--white);border-left:2px solid var(--gold)}
+.ora-row.user .agent-msg{background:var(--tint);color:var(--ink);border-radius:4px}
+.ora-row.assistant .agent-msg{border-radius:4px}
+.ora-row.failed .agent-msg,.agent-msg.failed,.sync.failed{color:var(--bad)}
+.ora-topics button:hover{border-color:var(--gold)}
+#oraView #agentForm:focus-within{border-color:var(--gold)}
+/* Map ramp in navy */
 .map,.venezuela{background:var(--tint)}.land{fill:var(--white);stroke:color-mix(in srgb,var(--muted) 40%,transparent)}
 .geo-panel [data-level="0"]{--fill:var(--tint)}
-.geo-panel [data-level="1"]{--fill:var(--data);--label:#fff}
-.geo-panel [data-level="2"]{--fill:color-mix(in srgb,var(--data) 70%,var(--white));--label:#fff}
+.geo-panel [data-level="1"]{--fill:var(--data);--label:var(--white)}
+.geo-panel [data-level="2"]{--fill:color-mix(in srgb,var(--data) 70%,var(--white));--label:var(--white)}
 .geo-panel [data-level="3"]{--fill:color-mix(in srgb,var(--data) 42%,var(--white));--label:var(--ink)}
 .geo-panel [data-level="4"]{--fill:color-mix(in srgb,var(--data) 20%,var(--white));--label:var(--ink)}
-/* Dialogs and menus follow the mode */
-.choices,.profile-menu,.export-menu>div,dialog{background:var(--white);color:var(--ink);border:1px solid var(--line)}
-.dialog-head button,#navOpen,#navClose{background:var(--tint);color:var(--ink)}
-.comparison,.trend .comparison,.detailsum{background:var(--tint);color:var(--ink)}
-input,select,textarea{color:var(--ink)}
+/* Appearance */
 #palettes{display:flex;gap:10px;flex-wrap:wrap}
-#palettes button{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--white);border-radius:10px;padding:10px 14px;font-weight:600}
-#palettes [aria-pressed=true]{outline:2px solid var(--fill);outline-offset:2px}
-.mode-swatch{width:22px;height:22px;border-radius:6px;border:1px solid var(--line)}
-.mode-light{background:#f6f8fb}.mode-dark{background:#12151c}.mode-auto{background:linear-gradient(135deg,#f6f8fb 50%,#12151c 50%)}
+#palettes button{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--white);border-radius:2px;padding:10px 14px;font-weight:600}
+#palettes [aria-pressed=true]{outline:2px solid var(--gold);outline-offset:2px}
+.mode-swatch{width:22px;height:22px;border-radius:2px;border:1px solid var(--line)}
+.mode-light{background:#f3f4f6}.mode-dark{background:#101b2e}.mode-auto{background:linear-gradient(135deg,#f3f4f6 50%,#101b2e 50%)}
 /* Login */
 .login-page{background:var(--paper)}
-.login-layout{border:0;box-shadow:var(--card-shadow);background:var(--white)}
-.login-identity{background:linear-gradient(160deg,var(--side),var(--side-2));color:#fff}
-.login-identity .brand{color:#fff}.login-identity p strong{color:#c7c3ff}
-.login-sheet input{background:var(--white);color:var(--ink);border-color:var(--line)}
-.login-submit{background:var(--fill);color:var(--on-fill)}
-.login-ora{display:block;width:min(220px,55%);height:auto;aspect-ratio:1;margin:auto;border-radius:50%;box-shadow:0 0 0 3px rgb(165 160 255/.45),0 30px 80px -30px rgb(99 91 255/.6)}
-@media(max-width:800px){aside,#sidebar{background:var(--side);box-shadow:0 -8px 24px -12px rgb(26 31 54/.4)}}
+.login-layout{border:1px solid var(--line);box-shadow:none;background:var(--white);border-radius:4px}
+.login-identity{background:var(--side);color:#fff}
+.login-identity .brand{color:#fff}.login-identity p{font-family:var(--serif)}.login-identity p strong{color:#d8b77f}
+.login-sheet h1{font-family:var(--serif)}
+.login-sheet input{background:var(--white);color:var(--ink);border-color:var(--line);border-radius:2px}
+.login-submit{background:var(--fill);color:var(--on-fill);border-radius:2px}
+.login-ora{display:block;width:min(200px,50%);height:auto;aspect-ratio:1;margin:auto;border-radius:50%;box-shadow:0 0 0 2px #b08d57}
+@media(max-width:800px){aside,#sidebar{background:var(--side);border-top:1px solid rgb(255 255 255/.08)}}
+@media(max-width:800px){#sidebar nav button.active{box-shadow:inset 0 2px 0 var(--gold)}#accountMenu summary{background:transparent}}

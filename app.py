@@ -28,6 +28,7 @@ BOUNDARY = "cartography/VEN-ADM1-9469f09.geojson"
 ASSETS["/" + BOUNDARY] = (BOUNDARY, "application/geo+json")
 for font in ("source-sans-3",):
     ASSETS[f"/fonts/{font}.ttf"] = (f"fonts/{font}.ttf","font/ttf")
+ASSETS["/fonts/source-serif-4.woff2"] = ("fonts/source-serif-4.woff2","font/woff2")
 for asset in ("exceljs.min.js","jspdf.umd.min.js","jspdf.plugin.autotable.min.js"):
     ASSETS["/vendor/" + asset] = ("vendor/" + asset, "text/javascript")
 PLANS = {"basico": ["sales"], "intermedio": ["sales","ar","clients","inventory"], "avanzado": ["sales","ar","clients","inventory"]}
@@ -60,7 +61,7 @@ ASSETS["/login.js"] = ("login.js","text/javascript")
 for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json"),
                    *((f"ora/{n}.webp","image/webp") for n in ("ora","ora-128","ora-pensando","ora-pensando-128"))):
     ASSETS["/" + name] = (name, mime)
-PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/icon.svg","/manifest.webmanifest","/ora/ora.webp")
+PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/fonts/source-serif-4.woff2","/icon.svg","/manifest.webmanifest","/ora/ora.webp")
 LOG = logging.getLogger("ora")
 AGENT_PLANS = {"intermedio","avanzado"}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
