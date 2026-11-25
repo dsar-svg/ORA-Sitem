@@ -107,12 +107,16 @@ async function send(){
   }
 }
 
+function showPeriod(){ const t = $('period').selectedOptions[0]?.text; $('oraPeriod').textContent = t ? 'Período: '+t : ''; }
+$('period')?.addEventListener('change', showPeriod);
+new MutationObserver(showPeriod).observe($('period'), {childList:true});
+
 function open(show){
   document.body.dataset.section = show ? 'ora' : '';
   $('oraView').hidden = !show;
   if (!show) return;
   document.querySelectorAll('#sidebar nav button').forEach(b=>b.classList.toggle('active', b.dataset.section==='ora'));
-  $('oraPeriod').textContent = 'Período: '+($('period').selectedOptions[0]?.text ?? '');
+  showPeriod();
   window.history.replaceState(null, '', '#ora');
   render(); $('agentInput').focus();
 }
