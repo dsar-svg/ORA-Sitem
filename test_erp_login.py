@@ -204,3 +204,15 @@ class LoginTests(unittest.TestCase):
         self.assertEqual((status,len(moves)),(200,cut["moves"]))
         self.assertTrue(all(m["cut"]==cut["id"] for m in moves))
         self.assertEqual(self.request("/api/moves?cut="+cut["id"])[0],401)
+
+    def test_staff_without_management_role(self):
+        cookie=self.login()[1]["Set-Cookie"].split(";")[0]
+        full=json.loads(self.request("/api/report",cookie=cookie)[2])
+        self.assertIn("product_cost",full)
+        with patch("app.MANAGERS",{"gerente@example.test"}):
+            staff=json.loads(self.request("/api/report",cookie=cookie)[2])
+            page=self.request("/",cookie=cookie)[2]
+        self.assertNotIn("product_cost",staff)
+        self.assertNotIn("payable",staff)
+        self.assertNotIn("ap",staff["modules"])
+        self.assertIn(b'data-module="ap" hidden',page)

@@ -106,6 +106,7 @@ ODOO_MODELS = {
                          "price_subtotal"}, False),
     "res.users": ({"name", "login"}, True),
 }
+MANAGEMENT_ONLY = {"purchase.order", "purchase.order.line", "account.payment"}
 RELATED = {"move_id.move_type", "move_id.state", "move_id.invoice_date", "move_id.invoice_user_id", "move_id.partner_id",
            "move_id.payment_state", "product_id.categ_id", "product_id.default_code", "order_id.state", "order_id.partner_id",
            "order_id.date_order", "location_id.usage", "partner_id.city", "partner_id.state_id"}
@@ -143,8 +144,9 @@ def plain(value):
 class Book:
     """The data one question may read: sales documents and receivables in the user's scope."""
 
-    def __init__(self, data, odoo=None):
-        self.odoo = odoo  # odoo_sales.Reader bound to the user's session, or None in demo and other ERPs
+    def __init__(self, data, odoo=None, manager=True):
+        self.odoo = odoo
+        self.manager = manager  # staff without the management role do not reach costs, purchases or payables  # odoo_sales.Reader bound to the user's session, or None in demo and other ERPs
         self.company = data.get("company", [{}])[0].get("name", "")
         self.origin = "Odoo" if odoo else "Datos sintéticos de demostración" if data.get("company", [{}])[0].get("source") == "demo-v1" else "ERP"
         self.tables, self.files = [], []
@@ -269,10 +271,15 @@ class Book:
     def consultar_odoo(self, modelo, metodo, dominio, campos, agrupar_por, orden, limite):
         if not self.odoo:
             raise ValueError("La consulta directa solo está disponible con Odoo conectado.")
-        if modelo not in ODOO_MODELS:
-            raise ValueError(f"Modelo no permitido: {modelo}. Permitidos: {', '.join(sorted(ODOO_MODELS))}")
+        if modelo not in ODOO_MODELS or (not self.manager and modelo in MANAGEMENT_ONLY):
+            raise ValueError(f"Modelo no permitido para este usuario: {modelo}.")
         allowed, shared = ODOO_MODELS[modelo]
+        if not self.manager:
+            allowed = allowed - {"standard_price", "purchase_price"}
         domain = self.odoo.scope(shared) + safe_domain(dominio, allowed)
+        if not self.manager and modelo in ("account.move", "account.move.line"):
+            # Staff see the customer side only: supplier bills and refunds stay with management.
+            domain += [["move_type" if modelo == "account.move" else "move_id.move_type", "in", ["out_invoice", "out_refund"]]]
         fields = [safe_field(f, allowed) for f in campos] or sorted(allowed)[:8]
         limit = max(1, min(int(limite or 20), 50))
         if metodo == "read_group":

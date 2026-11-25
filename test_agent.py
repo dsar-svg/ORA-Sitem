@@ -92,3 +92,16 @@ class AgentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StaffAgentTests(unittest.TestCase):
+    def test_staff_cannot_reach_costs_or_purchases(self):
+        calls = []
+        reader = NS(scope=lambda shared=False: [], call=lambda m, meth, kw: calls.append(kw) or [])
+        book = agent.Book({"company": [{"name": "E", "currency": "USD"}]}, reader, manager=False)
+        with self.assertRaises(ValueError):
+            book.consultar_odoo("purchase.order", "search_read", "[]", [], [], "", 5)
+        with self.assertRaises(ValueError):
+            book.consultar_odoo("product.product", "search_read", "[]", ["standard_price"], [], "", 5)
+        book.consultar_odoo("account.move", "search_read", '[["move_type","=","in_invoice"]]', ["name"], [], "", 5)
+        self.assertIn(["move_type", "in", ["out_invoice", "out_refund"]], calls[-1]["domain"])

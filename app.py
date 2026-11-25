@@ -90,6 +90,24 @@ class ReportCache:
 
 REPORTS = ReportCache()
 AGENT_PLANS = {"intermedio","avanzado"}
+# Management role: who sees product cost (Margen), payables and the purchase side in Ora. Unset means every seat,
+# which keeps single-manager pilots working; list the managers' emails once sellers or staff get access.
+MANAGERS = {e.strip().casefold() for e in os.getenv("ORA_MANAGERS","").split(",") if e.strip()} or None
+
+
+def is_manager(user):
+    return MANAGERS is None or (user or "").casefold() in MANAGERS
+
+
+def modules_for(user):
+    return [m for m in PLANS[PLAN] if m != "ap" or is_manager(user)]
+
+
+def for_role(report, user):
+    """A shallow copy without what only management may see; the cached report itself is left untouched."""
+    if is_manager(user) and PLAN != "basico":
+        return report
+    return {k: v for k, v in report.items() if k not in ("product_cost", "payable")}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
 # Inline style attributes carry bar widths and theme tokens; scripts stay same-origin only.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
@@ -205,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
             year, number = map(int, month.split("-"))
             data["cutoff"] = f"{month}-{calendar.monthrange(year,number)[1]:02d}"
         try:
-            book = Book(data, Reader(ERP.host, account) if SALES_MONTH else None)
+            book = Book(data, Reader(ERP.host, account) if SALES_MONTH else None, manager=is_manager(user))
             text, documents, tools, usage = ask(book, question, history, datetime.now(CARACAS).date().isoformat(), month, attachments=files)
         except AgentUnavailable as error:
             return answer(503, str(error))
@@ -331,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     self.reply(400)
                     return
-                if view is not None and view not in PLANS[PLAN]:
+                if view is not None and view not in modules_for(user):
                     self.reply(403)
                     return
                 key = (account.login, ERP.company_id, month, view)
@@ -352,19 +370,18 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(502)
                     return
                 report["plan"] = PLAN
-                if PLAN == "basico":
-                    report.pop("product_cost", None)  # margin belongs to Gestión and Dirección
+                payload = for_role(report, user)  # cost and payables only for management (and never in Básico)
                 if view:
-                    report.update(modules=PLANS[PLAN],firstMonth=earliest,lastMonth=latest)
+                    payload = {**payload, "modules": modules_for(user), "firstMonth": earliest, "lastMonth": latest}
                 # Inventory leaves daily rows and move lists on the server; the browser asks /api/moves per product.
-                body = json.dumps(slim_inventory(report) if view == "inventory" else report).encode()
+                body = json.dumps(slim_inventory(payload) if view == "inventory" else payload).encode()
                 # Inventory snapshots carry one row per product, warehouse and day; JSON compresses ~15x.
                 if "gzip" in self.headers.get("Accept-Encoding",""):
                     self.reply(200, gzip.compress(body, 6), "application/json", **{"Content-Encoding":"gzip","Vary":"Accept-Encoding"})
                 else:
                     self.reply(200, body, "application/json")
                 return
-            modules = PLANS[PLAN]
+            modules = modules_for(user)
             model = read_model(DATABASE, include_inventory="inventory" in modules)
             if ERP and any(c["source"]!="demo-v1" for c in model["company"]):
                 # Real snapshots require an explicit ERP company and record-permission mapping.
@@ -383,6 +400,7 @@ class Handler(BaseHTTPRequestHandler):
                 model["history"] = {"start":h["start_date"],"through":h["through_date"],
                                     "opening":bool(h["zero_opening"]),"applications":bool(h["applications_complete"])}
             model.update(modules=modules, plan=PLAN)
+            model = for_role(model, user)
             if "inventory" in modules:
                 model = slim_inventory(model)
             content = json.dumps(model, ensure_ascii=False).encode()
@@ -393,7 +411,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 # The plan is known here, so the sidebar paints with its final sections instead of after /api/demo.
                 for module in ("sales","ar","ap","clients","inventory"):
-                    if module not in PLANS[PLAN]:
+                    if module not in modules_for(user):
                         content = content.replace(f'data-module="{module}"'.encode(), f'data-module="{module}" hidden'.encode())
                 # Identity and source are known before /api/demo, so the header and profile paint final values.
                 plan_name = {"basico":"Básico","intermedio":"Intermedio","avanzado":"Avanzado"}[PLAN]
