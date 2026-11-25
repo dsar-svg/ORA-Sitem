@@ -1,4 +1,6 @@
 import argparse
+from threading import Lock
+from time import monotonic
 import gzip
 import json
 import logging
@@ -62,6 +64,30 @@ for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","applica
     ASSETS["/" + name] = (name, mime)
 PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/fonts/geist.woff2","/icon.svg","/manifest.webmanifest")
 LOG = logging.getLogger("ora")
+
+
+class ReportCache:
+    """Recent Odoo reports per user, company, month and view, so moving between sections does not re-read the ERP.
+    The open month is kept 5 minutes; closed months an hour. shortcut: process memory, lost on restart; move to SQLite when running several replicas."""
+    def __init__(self, size=48):
+        self.items, self.size, self.lock = {}, size, Lock()
+
+    def get(self, key):
+        with self.lock:
+            entry = self.items.get(key)
+            if entry and entry[0] > monotonic():
+                return entry[1]
+            self.items.pop(key, None)
+            return None
+
+    def put(self, key, report, closed):
+        with self.lock:
+            if len(self.items) >= self.size:
+                self.items.pop(min(self.items, key=lambda k: self.items[k][0]))
+            self.items[key] = (monotonic() + (3600 if closed else 300), report)
+
+
+REPORTS = ReportCache()
 AGENT_PLANS = {"intermedio","avanzado"}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
 # Inline style attributes carry bar widths and theme tokens; scripts stay same-origin only.
@@ -258,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/restock.js" and "inventory" not in PLANS[PLAN]:
             self.reply(403)
             return
-        if path == "/api/demo":
+        if path in ("/api/report","/api/demo"):  # /api/demo kept for pages loaded before the rename
             if SALES_MONTH:
                 options = parse_qs(urlsplit(self.path).query)
                 view = options.get("view",[None])[0]
@@ -275,8 +301,12 @@ class Handler(BaseHTTPRequestHandler):
                 if view is not None and view not in PLANS[PLAN]:
                     self.reply(403)
                     return
+                key = (account.login, ERP.company_id, month, view)
                 try:
-                    report = sales_report(ERP.host, account, month, view)
+                    report = REPORTS.get(key)
+                    if report is None:
+                        report = sales_report(ERP.host, account, month, view)
+                        REPORTS.put(key, report, month < latest)
                 except LoginDenied:
                     SESSIONS.account(self.headers.get("Cookie",""), logout=True)
                     self.reply(401)

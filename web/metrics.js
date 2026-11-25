@@ -16,6 +16,13 @@ export function prepare(data) {
     lines:(lines.get(d.id) ?? []).map(l => ({...l,name:products.get(l.product) ?? 'Sin producto'}))
   }));
 }
+// ERP names arrive raw: "[PAC180] Klip mochila", "EMILI BRICEÑO.". Products lose the bracketed code; people get title case.
+export const productName = name => String(name ?? '').replace(/^\s*\[[^\]]*\]\s*/, '').trim() || String(name ?? '');
+export function personName(name) {
+  const text = String(name ?? '').trim().replace(/[.,;\s]+$/, '');
+  if (/[a-záéíóúñ]/.test(text)) return text;
+  return text.toLocaleLowerCase('es').replace(/(^|[\s-])(\p{L})/gu, (m, sep, ch) => sep + ch.toLocaleUpperCase('es'));
+}
 export const sum = rows => rows.reduce((n,r) => n + r.value,0);
 export function sales(docs,month,product='') {
   return docs.filter(d => d.issued.startsWith(month)).flatMap(d => {

@@ -7,7 +7,7 @@ import {customers} from './customers.js';
 import {renderInventory} from './inventory.js';
 import {initAppearance} from './theme.js';
 import {face} from './ora.js';
-import {prepare,sales,balances,sum,groups,overdue} from './metrics.js';
+import {prepare,sales,balances,sum,groups,overdue,productName,personName} from './metrics.js';
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -46,7 +46,7 @@ const viewTitles={sales:'Resumen de ventas',ar:'Cuentas por cobrar',ap:'Cuentas 
 const loaderHTML='<div class="skeleton" role="status" aria-label="Cargando reporte"><i class="sk-line"></i><div class="sk-kpis"><i></i><i></i><i></i></div><div class="sk-panels"><i></i><i></i></div><div class="sk-table"><i></i><i></i><i></i><i></i></div></div>';
 function markLoading(view){
   document.querySelectorAll('[data-module]').forEach(b=>{const active=b.dataset.module===view;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active)});
-  $('title').textContent=viewTitles[view]??viewTitles.sales;$('subtitle').textContent='';
+  $('title').textContent=viewTitles[view]??viewTitles.sales;$('subtitle').textContent='';document.title=$('title').textContent+' · ORA';
   $('dashboard').innerHTML=loaderHTML;$('reportBar').hidden=true;
   $('sync').classList.add('loading');$('sync').textContent='Cargando datos…';
   document.body.classList.add('loading');
@@ -58,8 +58,10 @@ function openLiveView(view,month){
   if(month)target.searchParams.set('month',month);
   location.assign(target);
 }
+let showSync=()=>{};
 let salesTab='summary', arTab='summary', inventoryTab='summary', renderRestock, viewReport, detailReport;
 const businessToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Caracas',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const inPeriod=p=>p===businessToday().slice(0,7)?'Este mes':'En '+monthName(p);
 const rangeText=(a,b)=>day(a)+' – '+day(b);
 const selected=id=>$(id).selectedOptions[0]?.text??'';
 function context(title,range,filters){
@@ -139,7 +141,7 @@ function renderMargin(current,period,range){
     rows.length?'<div class="table-wrap"><table><thead><tr><th>'+label+'</th><th class="num">Venta neta</th><th class="num">Costo</th><th class="num">Margen</th><th class="num">%</th></tr></thead><tbody>'+
     rows.map(g=>{const open=drill(g.name,g.docs);return '<tr data-a="'+open+'"><td><button class="link name-link" data-a="'+open+'">'+esc(g.name)+'</button></td><td class="num">'+money(g.net)+'</td><td class="num">'+money(g.cost)+'</td><td class="num'+(g.margin<0?' negative':'')+'">'+money(g.margin)+'</td><td class="num">'+rate(g)+'</td></tr>'}).join('')+'</tbody></table></div>':'<p class="empty">Sin ventas con costo para estos filtros.</p>');
   const worst=groupsBy.producto.at(-1),best=groupsBy.producto[0];
-  const says='Este mes ganas '+money(gross)+' de margen bruto ('+rate({net,cost:costs})+' sobre la venta).'+(best?' '+best.name+' es el producto que más deja'+(worst&&worst!==best?'; '+worst.name+' el que menos':'')+'.':'');
+  const says=inPeriod(period)+(period===businessToday().slice(0,7)?' ganas ':' ganaste ')+money(gross)+' de margen bruto ('+rate({net,cost:costs})+' sobre la venta).'+(best?' '+best.name+' es el producto que más deja'+(worst&&worst!==best?'; '+worst.name+' el que menos':'')+'.':'');
   viewReport={...context('Margen bruto',range),summary:[['Venta neta con costo',net],['Costo',costs],['Margen bruto',gross]],
     note:'Costo actual del producto en el ERP.'+(missing?' '+missing+' renglones sin costo quedaron fuera.':''),
     tables:Object.entries(groupsBy).map(([k,rows])=>({name:'Margen por '+k,headers:[cap(k),'Venta neta','Costo','Margen','%'],amounts:[1,2,3],rows:rows.map(g=>[g.name,g.net,g.cost,g.margin,rate(g)])})),
@@ -237,10 +239,11 @@ function chart(current,prior,period,prev){
   return '<div class="legend"><span>'+dot(colors[0])+cap(monthName(period))+'</span><span>'+dot(colors[2])+cap(monthName(prev))+'</span></div><svg class="chart" viewBox="0 0 490 160" aria-label="Ventas netas por tramo del mes">'+grid+bars+bounds.map((v,i)=>'<text x="'+(78+i*71)+'" y="153" text-anchor="middle">'+(1+(bounds[i-1]||0))+'–'+(i===5?'fin':v)+'</text>').join('')+'</svg><div class="comparison" id="comparison" aria-live="polite">Enfoca un tramo para comparar ambos períodos.</div>';
 }
 function sellerRanking(rows){
-  const ranking=groups(rows,'seller'),total=sum(rows);
+  const full=groups(rows,'seller'),total=sum(rows);
+  const ranking=full.length>10?[...full.slice(0,8),{name:'__otros',docs:full.slice(8).flatMap(g=>g.docs),value:full.slice(8).reduce((n,g)=>n+g.value,0),rest:full.length-8}]:full;
   const max=Math.max(1,...ranking.map(g=>Math.abs(g.value)));
   return ranking.map(g=>{
-    const name=data.seller.find(s=>s.id===g.name)?.name??'Sin asignar';
+    const name=g.name==='__otros'?'Otros vendedores ('+g.rest+')':data.seller.find(s=>s.id===g.name)?.name??'Sin asignar';
     const count=g.docs.filter(r=>r.kind==='invoice').length;
     const detail=action(()=>{
       const lines=g.docs.flatMap(r=>r.lines.map(l=>({...l,value:r.sign*l.net})));
@@ -262,8 +265,9 @@ function distribution(rows){
 function horizontal(name,value,n,max,id,highlight=false){
   return '<button class="hrow '+(highlight?'priority':'')+'" data-a="'+id+'"><div><strong title="'+esc(name)+'">'+esc(name)+'</strong><b>'+esc(value)+'</b></div><span class="track"><i style="width:'+Math.abs(n)/max*100+'%"></i></span></button>';
 }
-function breakdown(title,label,entries,total){
+function breakdown(title,label,all,total){
   const ar=moduleName==='ar';
+  const entries=all.length>12?[...all.slice(0,10),{name:'Otros ('+(all.length-10)+')',docs:all.slice(10).flatMap(g=>g.docs),value:all.slice(10).reduce((n,g)=>n+g.value,0)}]:all;
   return panel(title,'Selecciona una fila para consultar sus documentos.','<div class="table-wrap"><table class="breakdown"><thead><tr><th>'+label+'</th><th class="num">Documentos</th><th class="num">Participación</th><th class="num">Importe</th>'+(ar?'<th class="num">Vencido</th>':'')+'<th>Detalle</th></tr></thead><tbody>'+entries.map(g=>{
     const share=total?g.value/total*100:0;
     const open=drill(g.name,g.docs);
@@ -289,6 +293,7 @@ function render(){
   $('branch').parentElement.hidden=stock||!!data.branch||!!data.reportMonth;
   $('prodLabel').hidden=!isSales||!data.product.length;
   reportTabs(isSales,statementMode);
+  showSync();
   document.querySelectorAll('.quick-range [data-range=today],.quick-range [data-range="7d"]').forEach(b=>b.hidden=!isSales);
   viewReport=null;
   $('dashboard').dataset.module=moduleName;
@@ -354,13 +359,15 @@ function render(){
     const invoices=current.filter(d=>d.sign===1), credits=current.filter(d=>d.sign===-1),net=sum(current);
     const previous=sum(prior),growth=previous>0?(net-previous)/previous*100:null;
     const recon=invoices.length+(invoices.length===1?' factura ':' facturas ')+money(sum(invoices))+(credits.length?' − '+credits.length+(credits.length===1?' nota de crédito ':' notas de crédito ')+money(-sum(credits)):'')+' = '+money(net)+' sin impuestos';
-    says=growth===null?'Este mes llevas '+money(net)+' en ventas netas.':'Este mes llevas '+money(net)+' en ventas netas, '+pct(Math.abs(growth))+(growth>=0?' más':' menos')+' que '+monthName(prev)+'.';
+    const verb=period===businessToday().slice(0,7)?' llevas ':' vendiste ';
+    says=growth===null?inPeriod(period)+verb+money(net)+' en ventas netas.':inPeriod(period)+verb+money(net)+' en ventas netas, '+pct(Math.abs(growth))+(growth>=0?' más':' menos')+' que '+monthName(prev)+'.';
     hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':[pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),growth>=0?'good':'bad'],'chart',current,true,
       '<span class="recon">'+esc(recon)+'</span>'+provenance(net));
     const priorInvoices=prior.filter(d=>d.sign===1).length,priorCredits=sum(prior.filter(d=>d.sign===-1));
     const versus=(now,before,fmt)=>now===before?'Igual que '+monthName(prev):fmt(Math.abs(now-before))+(now>before?' más que ':' menos que ')+monthName(prev);
     cards=kpi('Facturas emitidas',String(invoices.length),[versus(invoices.length,priorInvoices,String),invoices.length>=priorInvoices?'good':'bad'],'invoice',invoices)+
-      kpi('Notas de crédito',money(sum(credits)),[versus(Math.abs(sum(credits)),Math.abs(priorCredits),money),Math.abs(sum(credits))<=Math.abs(priorCredits)?'good':'caution'],'credit',credits);
+      kpi('Notas de crédito',money(sum(credits)),Math.abs(sum(credits))===Math.abs(priorCredits)?'Igual que '+monthName(prev):Math.abs(sum(credits))>Math.abs(priorCredits)?
+        [money(Math.abs(sum(credits))-Math.abs(priorCredits))+' más en devoluciones y ajustes que '+monthName(prev),'bad']:[money(Math.abs(priorCredits)-Math.abs(sum(credits)))+' menos en devoluciones y ajustes que '+monthName(prev),'good'],'credit',credits);
     evolution=panel('Evolución de ventas',range+' frente a '+rangeText(ranges.priorFirst,ranges.priorEnd)+' · '+curr+(coverage?' · '+coverage:''),chart(current,prior,period,prev));
     panels=(data.reportMonth?'':panel('Ventas por sucursal','Participación en la facturación neta',distribution(current)))+
       (hasSeller?panel('Ventas por vendedor','Facturación neta · participación · facturas emitidas',sellerRanking(current)):'');
@@ -495,10 +502,12 @@ try{
   const query=new URLSearchParams({view:requestedView});
   if(requested.has('month'))query.set('month',requested.get('month'));
   // A stalled ERP read must end in a visible error, not an endless loader.
-  const response=await fetch('/api/demo?'+query,{signal:AbortSignal.timeout(180000)}).catch(e=>{throw Error(e.name==='TimeoutError'?'Odoo tardó demasiado en responder. Intenta de nuevo o elige otro mes.':'No se pudo conectar con el servidor.')});
+  const response=await fetch('/api/report?'+query,{signal:AbortSignal.timeout(180000)}).catch(e=>{throw Error(e.name==='TimeoutError'?'Odoo tardó demasiado en responder. Intenta de nuevo o elige otro mes.':'No se pudo conectar con el servidor.')});
   if(response.status===401 && !response.headers.has('WWW-Authenticate')){location.replace('/login');throw Error('Sesión expirada')}
   if(!response.ok) throw Error(response.status===403?'Tu cuenta carece de acceso a la lectura solicitada.':'No se pudieron consultar los datos. Revisa la conexión y vuelve a cargar.');
   data=await response.json();
+  for(const p of data.product)p.name=productName(p.name);
+  for(const s of data.seller)s.name=personName(s.name);
   docs=prepare({...data,settlement:data.arDocument?[]:data.settlement??[]});
   if(data.firstMonth)moduleName=requestedView;
   if(data.arDocument){
@@ -526,7 +535,7 @@ try{
   options('statementCustomer',[...data.customer].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c=>[c.id,c.name]));
   const syncedAt=new Date(data.synced),stale=Date.now()-syncedAt>12*36e5;
   $('sync').classList.toggle('stale',stale);
-  $('sync').textContent=(stale?'Datos del ':'Actualizado · ')+syncedAt.toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'})+(stale?' · pueden no reflejar Odoo hoy':'');
+  showSync=()=>{$('sync').textContent=(data.cutoff||$('period').value?'Datos al '+day(lastDay())+' · ':'')+'leídos '+syncedAt.toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'})+(stale?' · pueden no reflejar Odoo hoy':'')};showSync();
   options('period',[...new Set(docs.map(d=>d.issued.slice(0,7)))].sort().reverse().map(m=>[m,cap(monthName(m))]));
   options('branch',[['','Todas las sucursales'],...[...new Set(docs.map(d=>d.branch))].sort().map(b=>[b,b])]);
   options('currency',[...new Set([...docs,...(ledgerDocs??[]),...(data.payable??[])].map(d=>d.currency))].sort().reverse().map(c=>[c,c]));

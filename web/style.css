@@ -881,3 +881,12 @@ body,table,.kpi strong,.hrow b,td{font-variant-numeric:tabular-nums}
 .quick-range button:hover{color:var(--ink)}
 .quick-range button[aria-pressed=true]{background:var(--white);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
 @media(max-width:800px){.quick-range{width:100%}.quick-range button{flex:1;padding:8px 4px;font-size:13px}}
+@media(max-width:800px){
+  .page .subtitle{display:none}
+  .report-tabs{overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+  #sidebar .aside-foot{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;flex:none;z-index:31}
+  #accountMenu summary{width:40px;height:40px;padding:0;border-radius:50%;background:var(--side);color:#fff;font-size:0;display:grid;place-items:center}
+  #accountMenu summary:after{content:none}#accountMenu summary i svg{width:20px;height:20px;color:#fff}
+  .profile-menu{inset:calc(100% + 8px) 0 auto auto}
+  main>header{padding-right:64px}
+}

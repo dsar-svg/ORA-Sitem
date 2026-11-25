@@ -27,7 +27,7 @@ class LoginTests(unittest.TestCase):
         sync(db,"andina",Demo())
         self.email="persona@example.test"
         for name,value in {"ERP":OdooLogin("https://erp.example.test","test-db",{self.email}),
-                           "DATABASE":db,"PUBLIC_ORIGIN":"","SESSIONS":Sessions()}.items():
+                           "DATABASE":db,"PUBLIC_ORIGIN":"","SESSIONS":Sessions(),"REPORTS":app.ReportCache()}.items():
             self.apply_mock(patch.object(app,name,value))
         self.upstream=self.apply_mock(patch("erp_auth.HTTPSConnection")).return_value
         self.response=self.upstream.getresponse.return_value
@@ -108,7 +108,9 @@ class LoginTests(unittest.TestCase):
         self.assertEqual(kwargs["context"]["allowed_company_ids"],[9])
         self.assertEqual(args[3]["Cookie"],"session_id=upstream")
         response.read.return_value = json.dumps({"result":[{**row,"company_id":[2,"A"]}]}).encode()
-        self.assertEqual(self.request("/api/demo",cookie=cookie)[0],502)
+        self.assertEqual(self.request("/api/report",cookie=cookie)[0],200)  # served from the cache, Odoo not re-read
+        app.REPORTS.items.clear()
+        self.assertEqual(self.request("/api/report",cookie=cookie)[0],502)
 
     def test_pending_factor_wrong_database_and_external_account(self):
         for change in ({"uid":None},{"db":"other"},{"is_internal_user":False},{"username":"other@example.test"}):
