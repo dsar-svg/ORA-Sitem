@@ -42,7 +42,8 @@ let ledgerDocs;
 const requested = new URLSearchParams(location.search);
 const requestedView = requested.get('view') || 'sales';
 const viewTitles={sales:'Resumen de ventas',ar:'Cuentas por cobrar',ap:'Cuentas por pagar',clients:'Clientes',inventory:'Inventario'};
-const loaderHTML='<div class="loader" role="status"><span></span>Cargando reporte…</div>';
+// Loading keeps the shape of the report (line, KPIs, charts, table) so nothing jumps when data arrives.
+const loaderHTML='<div class="skeleton" role="status" aria-label="Cargando reporte"><i class="sk-line"></i><div class="sk-kpis"><i></i><i></i><i></i></div><div class="sk-panels"><i></i><i></i></div><div class="sk-table"><i></i><i></i><i></i><i></i></div></div>';
 function markLoading(view){
   document.querySelectorAll('[data-module]').forEach(b=>{const active=b.dataset.module===view;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active)});
   $('title').textContent=viewTitles[view]??viewTitles.sales;$('subtitle').textContent='';
@@ -112,7 +113,8 @@ function openRows(title,rows,receivables=moduleName==='ar',extra='',range,asOf=l
 }
 function drill(name,rows,range){return action(()=>openRows(name,rows,moduleName==='ar','',range))}
 function kpi(title,value,sub,symbol,rows,primary=false,extra=''){
-  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span>'+extra+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
+  const [text,tone]=Array.isArray(sub)?sub:[sub,''];
+  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub'+(tone?' tone-'+tone:'')+'">'+esc(text)+'</span>'+extra+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
 }
 // Where the figure comes from and its cut-off date: the trust anchor under every headline figure.
 function provenance(cents){
@@ -287,6 +289,7 @@ function render(){
   $('branch').parentElement.hidden=stock||!!data.branch||!!data.reportMonth;
   $('prodLabel').hidden=!isSales||!data.product.length;
   reportTabs(isSales,statementMode);
+  document.querySelectorAll('.quick-range [data-range=today],.quick-range [data-range="7d"]').forEach(b=>b.hidden=!isSales);
   viewReport=null;
   $('dashboard').dataset.module=moduleName;
   const count=[...$('secondaryFilters').querySelectorAll('select')].filter(s=>!s.parentElement.hidden && s.value).length;
@@ -352,10 +355,12 @@ function render(){
     const previous=sum(prior),growth=previous>0?(net-previous)/previous*100:null;
     const recon=invoices.length+(invoices.length===1?' factura ':' facturas ')+money(sum(invoices))+(credits.length?' − '+credits.length+(credits.length===1?' nota de crédito ':' notas de crédito ')+money(-sum(credits)):'')+' = '+money(net)+' sin impuestos';
     says=growth===null?'Este mes llevas '+money(net)+' en ventas netas.':'Este mes llevas '+money(net)+' en ventas netas, '+pct(Math.abs(growth))+(growth>=0?' más':' menos')+' que '+monthName(prev)+'.';
-    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),'chart',current,true,
+    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':[pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),growth>=0?'good':'bad'],'chart',current,true,
       '<span class="recon">'+esc(recon)+'</span>'+provenance(net));
-    cards=kpi('Facturas emitidas',String(invoices.length),money(sum(invoices))+' sin impuestos','invoice',invoices)+
-      kpi('Notas de crédito',money(sum(credits)),credits.length+(credits.length===1?' documento de ajuste':' documentos de ajuste'),'credit',credits);
+    const priorInvoices=prior.filter(d=>d.sign===1).length,priorCredits=sum(prior.filter(d=>d.sign===-1));
+    const versus=(now,before,fmt)=>now===before?'Igual que '+monthName(prev):fmt(Math.abs(now-before))+(now>before?' más que ':' menos que ')+monthName(prev);
+    cards=kpi('Facturas emitidas',String(invoices.length),[versus(invoices.length,priorInvoices,String),invoices.length>=priorInvoices?'good':'bad'],'invoice',invoices)+
+      kpi('Notas de crédito',money(sum(credits)),[versus(Math.abs(sum(credits)),Math.abs(priorCredits),money),Math.abs(sum(credits))<=Math.abs(priorCredits)?'good':'caution'],'credit',credits);
     evolution=panel('Evolución de ventas',range+' frente a '+rangeText(ranges.priorFirst,ranges.priorEnd)+' · '+curr+(coverage?' · '+coverage:''),chart(current,prior,period,prev));
     panels=(data.reportMonth?'':panel('Ventas por sucursal','Participación en la facturación neta',distribution(current)))+
       (hasSeller?panel('Ventas por vendedor','Facturación neta · participación · facturas emitidas',sellerRanking(current)):'');
@@ -453,7 +458,32 @@ function fitNumbers(){
     while(el.scrollWidth>el.clientWidth&&size>12){size-=1;el.style.fontSize=size+'px'}
   });
 }
-new MutationObserver(()=>requestAnimationFrame(fitNumbers)).observe($('dashboard'),{childList:true});
+function activeFilters(){
+  return [...$('secondaryFilters').querySelectorAll('select')].some(s=>!s.parentElement.hidden&&s.value)||!!($('docSearch').value||$('docFrom').value||$('docUntil').value||$('docType').value);
+}
+function enhanceEmpty(){
+  if(!activeFilters())return;
+  document.querySelectorAll('#dashboard .empty').forEach(p=>{if(!p.querySelector('.reset-filters'))p.insertAdjacentHTML('beforeend',' <button type="button" class="link reset-filters">Quitar filtros</button>')});
+}
+$('dashboard').addEventListener('click',e=>{
+  if(!e.target.closest('.reset-filters'))return;
+  $('secondaryFilters').querySelectorAll('select').forEach(s=>{s.value='';s.dispatchEvent(new Event('change',{bubbles:true}))});
+  for(const id of ['docSearch','docFrom','docUntil','docType'])$(id).value='';
+  render();
+});
+document.querySelector('.quick-range').addEventListener('click',e=>{
+  const b=e.target.closest('[data-range]');
+  if(!b)return;
+  const months=[...$('period').options].map(o=>o.value).sort(),latest=months.at(-1),range=b.dataset.range;
+  const target=range==='prev'?(months.at(-2)??latest):latest;
+  if($('period').value!==target){$('period').value=target;$('period').dispatchEvent(new Event('change',{bubbles:true}))}
+  if((range==='today'||range==='7d')&&moduleName==='sales'){
+    const end=businessToday(),start=new Date(Date.parse(end)-(range==='7d'?6:0)*864e5).toISOString().slice(0,10);
+    salesTab='docs';$('docFrom').value=start;$('docUntil').value=end;render();
+  }
+  document.querySelectorAll('.quick-range [data-range]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+});
+new MutationObserver(()=>requestAnimationFrame(()=>{fitNumbers();enhanceEmpty()})).observe($('dashboard'),{childList:true});
 window.addEventListener('resize',()=>requestAnimationFrame(fitNumbers));
 if(viewTitles[requestedView])markLoading(requestedView);
 // Live mode reloads per section; keep the sidebar usable while this section's data is still arriving.

@@ -785,7 +785,6 @@ body[data-section=ora] #sidebar nav button[data-module].active{background:transp
 .report-tabs,.client-tabs{background:transparent;border-bottom:1px solid var(--line);border-radius:0;padding:0;gap:22px}
 .report-tabs button,.client-tabs button{border-radius:0;padding:8px 0;background:transparent;color:var(--muted)}
 .report-tabs button[aria-pressed=true],.client-tabs [aria-selected=true]{background:transparent;color:var(--ink);box-shadow:inset 0 -2px 0 var(--gold)}
-.chart g:hover rect,.chart g:focus-visible rect{fill:var(--gold)}
 .track{background:var(--tint);border-radius:0}.track i{background:var(--data);border-radius:0}
 .hrow.priority .track i{background:var(--warn)}
 .comparison,.trend .comparison,.detailsum{background:var(--tint);color:var(--ink);border-radius:2px}
@@ -840,3 +839,45 @@ input,select,textarea{color:var(--ink)}
 td.negative{color:var(--bad)}
 .nav-short{display:none}
 @media(max-width:800px){.nav-long{display:none}.nav-short{display:inline}#sidebar nav button{font-size:11px;padding:6px 0;gap:2px}#sidebar .aside-foot{flex:0 0 52px}}
+
+/* Chart series validated with the dataviz checks: blue for this period, ochre for the previous one, per mode */
+:root{--data:#2c5fa8;--data-prev:#b07a2f;--peach:#b07a2f}
+:root[data-mode=dark]{--data:#5b8bd0;--data-prev:#b9873a;--peach:#b9873a}
+@media (prefers-color-scheme:dark){:root[data-mode=auto]{--data:#5b8bd0;--data-prev:#b9873a;--peach:#b9873a}}
+.chart g:hover rect,.chart g:focus-visible rect{filter:brightness(1.18)}
+.panel h2{text-wrap:balance}
+.hint{font-size:13px}
+.chart g:is(:hover,:focus-visible) rect.current{fill:var(--data);stroke:none}.chart g:is(:hover,:focus-visible) rect.previous{fill:var(--data-prev);stroke:none}
+
+/* ===== Reglas ora-ui: cifras tabulares, paleta semántica, esqueletos, rangos rápidos ===== */
+:root{--caution:#a15c07}
+:root[data-mode=dark]{--caution:#f0b45e}
+@media (prefers-color-scheme:dark){:root[data-mode=auto]{--caution:#f0b45e}}
+body,table,.kpi strong,.hrow b,td{font-variant-numeric:tabular-nums}
+/* Semantic tones on KPI subtitles: always paired with words */
+.kpi .sub.tone-good{color:var(--good)}.kpi .sub.tone-bad{color:var(--bad)}.kpi .sub.tone-caution{color:var(--caution)}
+.kpi .sub[class*=tone-]{font-weight:600}
+.kpi .alert{color:var(--bad)}
+/* Overdue is a problem (red); stock to reorder is attention (amber) */
+.hrow.priority strong{color:var(--bad)}.hrow.priority .track i{background:var(--bad)}
+#dashboard[data-module=inventory] .hrow.priority strong{color:var(--caution)}
+#dashboard[data-module=inventory] .hrow.priority .track i{background:var(--caution)}
+.sync.stale{color:var(--caution)}
+/* Skeleton: the report's shape while data loads */
+.skeleton{display:grid;gap:14px;padding-top:4px}
+.skeleton i{display:block;border-radius:var(--radius,4px);background:linear-gradient(90deg,var(--tint) 0%,color-mix(in srgb,var(--tint) 55%,var(--white)) 50%,var(--tint) 100%);background-size:200% 100%;animation:sk-shine 1.3s ease-in-out infinite}
+.sk-line{height:46px}
+.sk-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.sk-kpis i{height:132px}
+.sk-panels{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}.sk-panels i{height:260px}
+.sk-table{display:grid;gap:8px}.sk-table i{height:34px}
+@keyframes sk-shine{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.skeleton i{animation:none}}
+@media(max-width:800px){.sk-kpis{grid-template-columns:1fr 1fr}.sk-panels{grid-template-columns:1fr}}
+/* Empty states with an action */
+.empty .reset-filters{margin-left:6px}
+/* Quick ranges in the global filter bar */
+.quick-range{display:flex;gap:2px;background:var(--tint);border-radius:var(--radius,4px);padding:3px}
+.quick-range button{background:transparent;border:0;border-radius:2px;padding:7px 12px;font-weight:600;font-size:14px;color:var(--muted)}
+.quick-range button:hover{color:var(--ink)}
+.quick-range button[aria-pressed=true]{background:var(--white);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+@media(max-width:800px){.quick-range{width:100%}.quick-range button{flex:1;padding:8px 4px;font-size:13px}}
