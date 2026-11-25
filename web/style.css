@@ -837,3 +837,6 @@ input,select,textarea{color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.ora-face.mark .corner{animation:none!important}}
 .abc{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:4px;font-weight:700;font-size:13px}
 .abc-A{background:var(--data);color:var(--white)}.abc-B{background:color-mix(in srgb,var(--data) 35%,var(--white));color:var(--ink)}.abc-C{background:var(--tint);color:var(--muted)}
+td.negative{color:var(--bad)}
+.nav-short{display:none}
+@media(max-width:800px){.nav-long{display:none}.nav-short{display:inline}#sidebar nav button{font-size:11px;padding:6px 0;gap:2px}#sidebar .aside-foot{flex:0 0 52px}}

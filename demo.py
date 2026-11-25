@@ -54,5 +54,18 @@ class Demo:
         data["credit_line"] = [(str(i),"USD",limit) for i,limit in
                                enumerate([600000,250000,420000,300000,500000,550000,0])]
         data["history_coverage"] = [(1,"2026-01-01","2026-10-31",1,1)]
+        data["product_cost"] = [(str(i),"USD",cost) for i,cost in enumerate([560,290,410,215,265])]
+        suppliers = ["Molinos del Centro", "Aceitera del Lago", "Tostadora Andina", "Azucarera Valle Verde", "Empaques Litoral"]
+        supply = Random(9001)
+        data["payable"] = []
+        for month in range(1, 11):
+            for k in range(6):
+                issued = date(2026, month, supply.randrange(1, 28))
+                due = issued + timedelta(days=supply.choice([30,45,60]))
+                total = supply.randrange(80000, 420000)
+                residual = total if month >= 9 or (month == 8 and k % 2) else (total // 3 if k == 5 else 0)
+                key = f"{month:02}{k}"
+                data["payable"].append(("P"+key, f"FP-26-{key}", suppliers[(month+k) % 5], issued.isoformat(), due.isoformat(),
+                                        "USD", total, residual))
         data.update(inventory_fixture())
         return data

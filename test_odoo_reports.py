@@ -3,7 +3,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from odoo_inventory import inventory
-from odoo_sales import receivables, drop_group, tax_key, bolivar_rate
+from odoo_sales import receivables, drop_group, tax_key, bolivar_rate, payables, product_costs
 from erp_auth import ProviderUnavailable
 
 
@@ -66,3 +66,16 @@ class LiveReportsTests(TestCase):
         self.assertIsNone(bolivar_rate(reader,9,"VES","2026-10-31"))
         reader.call.side_effect = ProviderUnavailable()
         self.assertIsNone(bolivar_rate(reader,9,"USD","2026-10-31"))
+
+    def test_payables_and_costs(self):
+        reader = Mock()
+        reader.rows.return_value = [dict(id=1,name="BILL/1",ref="F-77",partner_id=[4,"Proveedor"],invoice_date="2026-10-02",
+            invoice_date_due="2026-11-01",currency_id=[1,"USD"],amount_total=100,amount_residual=40,move_type="in_invoice"),
+            dict(id=2,name="RBILL/1",ref=False,partner_id=[4,"Proveedor"],invoice_date="2026-10-05",invoice_date_due=False,
+            currency_id=[1,"USD"],amount_total=10,amount_residual=10,move_type="in_refund")]
+        data = {"payable":[],"product_cost":[],"company":[{"currency":"USD"}]}
+        payables(reader,data)
+        self.assertEqual([(p["number"],p["residual"],p["due"]) for p in data["payable"]],[("F-77",4000,"2026-11-01"),("RBILL/1",-1000,"2026-10-05")])
+        reader.related.return_value = [dict(id=7,standard_price=5.6)]
+        product_costs(reader,data,[7])
+        self.assertEqual(data["product_cost"],[dict(product="7",currency="USD",unit_cost=560)])

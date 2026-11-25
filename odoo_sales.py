@@ -216,6 +216,28 @@ def bolivar_rate(reader,company_id,currency,end):
     return dict(rate=str(rows[0]["inverse_rate"]),date=rows[0]["name"],currency=currency)
 
 
+def product_costs(reader,data,ids):
+    # Current cost from Odoo (standard_price, company currency). shortcut: today's cost, not the cost at sale date; use stock valuation layers when clients need historical margin.
+    currency = data["company"][0].get("currency")
+    if not ids or not currency:
+        return
+    try:
+        for r in reader.related("product.product","standard_price",ids,shared=True):
+            data["product_cost"].append(dict(product=str(r["id"]),currency=currency,unit_cost=cents(r["standard_price"])))
+    except PermissionError:
+        pass  # Margin is simply not shown to users who cannot read costs.
+
+
+def payables(reader,data):
+    domain = [["state","=","posted"],["move_type","in",["in_invoice","in_refund"]],["amount_residual","!=",0]]
+    fields = "name ref partner_id invoice_date invoice_date_due currency_id amount_total amount_residual move_type"
+    for r in reader.rows("account.move",fields,domain):
+        sign = -1 if r["move_type"]=="in_refund" else 1
+        data["payable"].append(dict(id=str(r["id"]),number=r["ref"] or r["name"],supplier=(r["partner_id"] or [0,"Sin proveedor"])[1],
+            issued=r["invoice_date"] or "",due=r["invoice_date_due"] or r["invoice_date"] or "",currency=r["currency_id"][1],
+            total=sign*cents(r["amount_total"]),residual=sign*cents(r["amount_residual"])))
+
+
 def credit_limits(reader,data,ids):
     # Credit limits are company-dependent, denominated in the company currency.
     try:
@@ -236,7 +258,7 @@ def sales_report(host,account,month,view=None):
     today = datetime.now(CARACAS).date()
     end = min(today,(first.replace(day=28)+timedelta(days=4)).replace(day=1)-timedelta(days=1))
     reader = Reader(host,account)
-    keys = ("document customer line product assignment seller location settlement customer_profile credit_line "
+    keys = ("document customer line product assignment seller location settlement customer_profile credit_line product_cost payable "
             "warehouse article stock_cut stock_move stock_day stock_policy inbound").split()
     data = {key:[] for key in keys}
     data.update(company=[dict(id=str(account.company_id),name=account.company,source="odoo")],
@@ -263,6 +285,10 @@ def sales_report(host,account,month,view=None):
         profiles(reader,data)
     elif view=="ar":
         credit_limits(reader,data,[int(c["id"]) for c in data["customer"] if c["id"]!="0"])
+    if view in (None,"sales") and data["product"]:
+        product_costs(reader,data,[int(p["id"]) for p in data["product"] if p["id"].isdigit()])
+    if view=="ap":
+        payables(reader,data)
     if view=="inventory":
         from odoo_inventory import inventory
         inventory(reader,data,first,end,today)

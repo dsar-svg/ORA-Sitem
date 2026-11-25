@@ -25,6 +25,8 @@ DIMENSIONS = {
     "seller": "id,name",
     "assignment": "document,seller",
     "location": "customer,zone,latitude,longitude,precision",
+    "product_cost": "product,currency,unit_cost",
+    "payable": "id,number,supplier,issued,due,currency,total,residual",
 }
 REPLENISHMENT = {
     "stock_day":"cut,posted,availability",
@@ -75,6 +77,10 @@ CREATE TABLE IF NOT EXISTS stock_day(cut TEXT NOT NULL REFERENCES stock_cut(id),
  PRIMARY KEY(cut,posted));
 CREATE TABLE IF NOT EXISTS inbound(id TEXT PRIMARY KEY,cut TEXT NOT NULL REFERENCES stock_cut(id),
  arrival TEXT NOT NULL,open_units INTEGER NOT NULL CHECK(open_units>=0),state TEXT NOT NULL CHECK(state IN ('confirmed','draft','cancelled')));
+CREATE TABLE IF NOT EXISTS product_cost(product TEXT NOT NULL REFERENCES product(id),currency TEXT NOT NULL,
+ unit_cost INTEGER NOT NULL CHECK(unit_cost>=0),PRIMARY KEY(product,currency));
+CREATE TABLE IF NOT EXISTS payable(id TEXT PRIMARY KEY,number TEXT NOT NULL,supplier TEXT NOT NULL,issued TEXT NOT NULL,
+ due TEXT NOT NULL,currency TEXT NOT NULL,total INTEGER NOT NULL,residual INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sync(completed TEXT NOT NULL);
 """
 
