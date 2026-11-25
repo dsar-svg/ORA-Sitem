@@ -41,8 +41,9 @@ let data, opener, docs, moduleName='sales', actions=[];
 let ledgerDocs;
 const requested = new URLSearchParams(location.search);
 const requestedView = requested.get('view') || 'sales';
-const viewTitles={sales:'Resumen de ventas',ar:'Cuentas por cobrar',clients:'Clientes',inventory:'Inventario'};
-const loaderHTML='<div class="loader" role="status"><span></span>Cargando reporte…</div>';
+const viewTitles={sales:'Resumen de ventas',ar:'Cuentas por cobrar',ap:'Cuentas por pagar',clients:'Clientes',inventory:'Inventario'};
+// Loading keeps the shape of the report (line, KPIs, charts, table) so nothing jumps when data arrives.
+const loaderHTML='<div class="skeleton" role="status" aria-label="Cargando reporte"><i class="sk-line"></i><div class="sk-kpis"><i></i><i></i><i></i></div><div class="sk-panels"><i></i><i></i></div><div class="sk-table"><i></i><i></i><i></i><i></i></div></div>';
 function markLoading(view){
   document.querySelectorAll('[data-module]').forEach(b=>{const active=b.dataset.module===view;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active)});
   $('title').textContent=viewTitles[view]??viewTitles.sales;$('subtitle').textContent='';
@@ -75,7 +76,7 @@ function reportTabs(salesMode,statementMode){
   const inv=moduleName==='inventory'&&data.modules.includes('inventory');
   $('reportBar').hidden=!salesMode && moduleName!=='ar'&&!inv;
   $('restockControls').hidden=!inv||inventoryTab!=='restock';
-  const pair=inv?[['summary','Existencias'],['restock','Reposición']]:salesMode?[['summary','Resumen'],['docs','Documentos']]:[['summary','Resumen'],['statement','Estados de cuenta']];
+  const pair=inv?[['summary','Existencias'],['abc','Análisis ABC'],['restock','Reposición']]:salesMode?[['summary','Resumen'],...(data.product_cost?.length?[['margin','Margen']]:[]),['docs','Documentos']]:[['summary','Resumen'],['collections','Cobranza'],['statement','Estados de cuenta']];
   const active=inv?inventoryTab:salesMode?salesTab:arTab;
   $('reportBar').firstElementChild.innerHTML=pair.map(([id,name])=>'<button data-view="'+id+'" aria-pressed="'+(id===active)+'">'+name+'</button>').join('');
   $('viewExport').innerHTML=salesMode||moduleName==='ar'||(inv&&inventoryTab==='restock')?exportMenu('view'):'';
@@ -112,7 +113,8 @@ function openRows(title,rows,receivables=moduleName==='ar',extra='',range,asOf=l
 }
 function drill(name,rows,range){return action(()=>openRows(name,rows,moduleName==='ar','',range))}
 function kpi(title,value,sub,symbol,rows,primary=false,extra=''){
-  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub">'+esc(sub)+'</span>'+extra+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
+  const [text,tone]=Array.isArray(sub)?sub:[sub,''];
+  return '<button class="kpi '+(primary?'primary':'')+'" data-a="'+drill(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+value+'</strong><span class="sub'+(tone?' tone-'+tone:'')+'">'+esc(text)+'</span>'+extra+(primary?'<span class="cta">Ver documentos</span>':'')+'</button>';
 }
 // Where the figure comes from and its cut-off date: the trust anchor under every headline figure.
 function provenance(cents){
@@ -121,6 +123,97 @@ function provenance(cents){
 }
 function panel(title,sub,body){return '<article class="panel"><h2>'+title+'</h2><p class="hint">'+esc(sub)+'</p>'+body+'</article>'}
 function dot(color){return '<i class="dot" style="background:'+color+'"></i>'}
+// Margen bruto: net sales minus quantity × the ERP's product cost, by product, customer, seller and branch.
+function renderMargin(current,period,range){
+  const curr=$('currency').value,cost=new Map(data.product_cost.filter(c=>c.currency===curr).map(c=>[c.product,c.unit_cost]));
+  const sellers=new Map(data.seller.map(s=>[s.id,s.name]));
+  const lines=current.flatMap(d=>d.lines.map(l=>({doc:d,name:l.name,product:l.product,net:d.sign*l.net,
+    cost:cost.has(l.product)?d.sign*l.quantity*cost.get(l.product):null})));
+  const known=lines.filter(l=>l.cost!=null),missing=lines.length-known.length;
+  const net=known.reduce((n,l)=>n+l.net,0),costs=known.reduce((n,l)=>n+l.cost,0),gross=net-costs;
+  const rate=v=>v.net?pct((v.net-v.cost)/v.net*100):'—';
+  const by=key=>{const m=new Map();for(const l of known){const k=key(l);const g=m.get(k)??{name:k,net:0,cost:0,docs:new Map()};g.net+=l.net;g.cost+=l.cost;g.docs.set(l.doc.id,l.doc);m.set(k,g)}
+    return [...m.values()].map(g=>({...g,margin:g.net-g.cost,docs:[...g.docs.values()]})).sort((a,b)=>b.margin-a.margin)};
+  const groupsBy={producto:by(l=>l.name),cliente:by(l=>l.doc.client),vendedor:by(l=>sellers.get(l.doc.seller)??'Sin asignar'),...(data.reportMonth?{}:{sucursal:by(l=>l.doc.branch)})};
+  const table=(title,rows,label)=>panel(title,'Venta neta, costo y margen bruto · Selecciona una fila para ver sus documentos',
+    rows.length?'<div class="table-wrap"><table><thead><tr><th>'+label+'</th><th class="num">Venta neta</th><th class="num">Costo</th><th class="num">Margen</th><th class="num">%</th></tr></thead><tbody>'+
+    rows.map(g=>{const open=drill(g.name,g.docs);return '<tr data-a="'+open+'"><td><button class="link name-link" data-a="'+open+'">'+esc(g.name)+'</button></td><td class="num">'+money(g.net)+'</td><td class="num">'+money(g.cost)+'</td><td class="num'+(g.margin<0?' negative':'')+'">'+money(g.margin)+'</td><td class="num">'+rate(g)+'</td></tr>'}).join('')+'</tbody></table></div>':'<p class="empty">Sin ventas con costo para estos filtros.</p>');
+  const worst=groupsBy.producto.at(-1),best=groupsBy.producto[0];
+  const says='Este mes ganas '+money(gross)+' de margen bruto ('+rate({net,cost:costs})+' sobre la venta).'+(best?' '+best.name+' es el producto que más deja'+(worst&&worst!==best?'; '+worst.name+' el que menos':'')+'.':'');
+  viewReport={...context('Margen bruto',range),summary:[['Venta neta con costo',net],['Costo',costs],['Margen bruto',gross]],
+    note:'Costo actual del producto en el ERP.'+(missing?' '+missing+' renglones sin costo quedaron fuera.':''),
+    tables:Object.entries(groupsBy).map(([k,rows])=>({name:'Margen por '+k,headers:[cap(k),'Venta neta','Costo','Margen','%'],amounts:[1,2,3],rows:rows.map(g=>[g.name,g.net,g.cost,g.margin,rate(g)])})),
+    charts:[barChart('Margen por producto',groupsBy.producto.map(g=>({name:g.name,value:g.margin})))]};
+  $('dashboard').innerHTML='<p class="ora-says">'+face(30)+'<span>'+esc(says)+'</span></p><div class="kpis">'+
+    kpi('Margen bruto',money(gross),rate({net,cost:costs})+' sobre la venta neta','chart',current,true,'<span class="source">Costo actual del producto en el ERP'+(missing?' · '+missing+' renglones sin costo':'')+'</span>')+
+    kpi('Venta neta',money(net),'Renglones con costo conocido','invoice',current)+kpi('Costo de lo vendido',money(costs),'Cantidad × costo del producto','box',current)+'</div>'+
+    Object.entries(groupsBy).map(([k,rows])=>table('Margen por '+k,rows,cap(k))).join('');
+}
+
+// Cuentas por pagar: open supplier bills by due window and by supplier, as Odoo has them today.
+function renderPayables(){
+  const curr=$('currency').value,ref=data.reportMonth?businessToday():lastDay(),cut=Date.parse(ref);
+  document.querySelectorAll('[data-module]').forEach(b=>{const active=b.dataset.module==='ap';b.classList.toggle('active',active);b.setAttribute('aria-pressed',active)});
+  $('dashboard').dataset.module='ap';viewReport=null;
+  $('reportBar').hidden=true;$('docFilters').hidden=true;$('restockControls').hidden=true;
+  for(const id of ['branch','seller','zone','product','statementCustomer','warehouse','category','stockProduct'])$(id).parentElement.hidden=true;
+  $('prodLabel').hidden=true;
+  $('title').textContent='Cuentas por pagar';document.title='Cuentas por pagar · ORA';
+  $('subtitle').textContent='Facturas de proveedores con saldo pendiente al '+day(ref)+'.';
+  const bills=(data.payable??[]).filter(b=>b.currency===curr&&b.residual!==0).map(b=>({...b,days:Math.round((cut-Date.parse(b.due))/864e5)}));
+  const total=bills.reduce((n,b)=>n+b.residual,0),add=r=>r.reduce((n,b)=>n+b.residual,0);
+  const list=(title,rows)=>action(()=>showDetail(title,'FACTURAS DE PROVEEDOR','<div class="detailsum">'+rows.length+' facturas · '+money(add(rows))+'</div>'+
+    '<div class="table-wrap"><table><thead><tr><th>Factura</th><th>Proveedor</th><th>Emisión</th><th>Vence</th><th class="num">Total</th><th class="num">Saldo</th></tr></thead><tbody>'+
+    [...rows].sort((a,b)=>a.due.localeCompare(b.due)).map(b=>'<tr><td>'+esc(b.number)+'</td><td>'+esc(b.supplier)+'</td><td>'+day(b.issued)+'</td><td>'+day(b.due)+(b.days>0?' · '+b.days+' d vencida':'')+'</td><td class="num">'+money(b.total)+'</td><td class="num">'+money(b.residual)+'</td></tr>').join('')+'</tbody></table></div>'));
+  const windows=[['Vencido: pagar ya',b=>b.days>0],['Próximos 7 días',b=>b.days>-7&&b.days<=0],['Días 8 a 14',b=>b.days>-14&&b.days<=-7],['Días 15 a 30',b=>b.days>-30&&b.days<=-14],['Más de 30 días',b=>b.days<=-30]];
+  const bands=windows.map(([name,test])=>({name,rows:bills.filter(test)})),max=Math.max(1,...bands.map(b=>Math.abs(add(b.rows))));
+  const suppliers=[...bills.reduce((m,b)=>m.set(b.supplier,[...(m.get(b.supplier)??[]),b]),new Map())].map(([name,rows])=>({name,rows,value:add(rows)})).sort((a,b)=>b.value-a.value);
+  const top=Math.max(1,...suppliers.map(s=>Math.abs(s.value)));
+  const card=(title,rows,sub,symbol,primary=false)=>'<button class="kpi '+(primary?'primary':'')+'" data-a="'+list(title,rows)+'"><span class="kpi-name"><i class="icon-box">'+icon(symbol)+'</i>'+title+'</span>'+(primary?'':'<span class="arrow"></span>')+'<strong>'+money(add(rows))+'</strong><span class="sub">'+esc(sub)+'</span>'+(primary?'<span class="cta">Ver facturas</span>':'')+'</button>';
+  const late=bands[0].rows,week=bands[1].rows;
+  viewReport={...context('Cuentas por pagar','Al '+day(ref)),summary:[['Saldo por pagar',total],['Vencido',add(late)],['Próximos 7 días',add(week)]],
+    tables:[{name:'Calendario de pagos',headers:['Tramo','Facturas','Saldo'],amounts:[2],rows:bands.map(b=>[b.name,b.rows.length,add(b.rows)])},
+      {name:'Facturas',headers:['Factura','Proveedor','Emisión','Vence','Total','Saldo'],amounts:[4,5],rows:bills.map(b=>[b.number,b.supplier,b.issued,b.due,b.total,b.residual])}],
+    charts:[barChart('Calendario de pagos',bands.map(b=>({name:b.name,value:add(b.rows)})))]};
+  const says=bills.length?'Debes '+money(total)+' a proveedores; '+money(add(late))+' ya vencido y '+money(add(week))+' vence en los próximos 7 días.'+(suppliers[0]?' A '+suppliers[0].name+' le debes más.':''):'No tienes facturas de proveedores pendientes.';
+  $('dashboard').innerHTML='<p class="ora-says">'+face(30)+'<span>'+esc(says)+'</span></p><div class="kpis">'+
+    card('Saldo por pagar',bills,bills.length+' facturas pendientes','wallet',true)+card('Vencido',late,late.length+' facturas','clock')+card('Próximos 7 días',week,week.length+' facturas','calendar')+'</div>'+
+    '<div class="panels">'+panel('Calendario de pagos','Saldo pendiente por fecha de vencimiento · Selecciona un tramo para ver sus facturas',bands.map((b,i)=>horizontal(b.name,money(add(b.rows))+' · '+b.rows.length+' fact.',add(b.rows),max,list(b.name,b.rows),i===0)).join(''))+
+    panel('Por proveedor','Saldo pendiente por proveedor',suppliers.slice(0,8).map(s=>horizontal(s.name,money(s.value)+' · '+s.rows.length+' fact.',s.value,top,list(s.name,s.rows))).join('')||'<p class="empty">Sin facturas pendientes.</p>')+'</div>';
+  $('viewExport').innerHTML=exportMenu('view');$('reportBar').hidden=false;$('reportBar').firstElementChild.innerHTML='';
+}
+
+// Cobranza: when the open balance should come in, how long collection takes and who is past their limit.
+function renderCollections(filtered,rows,late,upcoming,period){
+  const end=lastDay(),cut=new Date(end+'T00:00:00Z'),curr=$('currency').value;
+  const weeks=[['Vencido: cobrar ya',d=>d.days>0],['Próximos 7 días',d=>d.days>-7&&d.days<=0],['Días 8 a 14',d=>d.days>-14&&d.days<=-7],['Días 15 a 30',d=>d.days>-30&&d.days<=-14],['Más de 30 días',d=>d.days<=-30]];
+  const open=rows.filter(d=>!d.payment&&d.value>0);
+  const bands=weeks.map(([name,test])=>({name,docs:open.filter(test)})),max=Math.max(1,...bands.map(b=>sum(b.docs)));
+  const days=Number(end.slice(-2)),billed=filtered.filter(d=>d.sign===1&&d.issued.startsWith(period)).reduce((n,d)=>n+(d.gross??gross(d)),0);
+  const dso=billed>0?Math.round(sum(rows)/billed*days):null;
+  const limits=new Map(data.credit_line.filter(l=>l.currency===curr).map(l=>[l.customer,l.limit_cents]));
+  const risk=groups(rows,'customer').map(g=>{
+    const due=sum(g.docs.filter(overdue)),limit=limits.get(g.name),soldNow=filtered.some(d=>d.customer===g.name&&d.sign===1&&d.issued.startsWith(period));
+    return {...g,client:g.docs[0].client,due,limit,over:limit!=null&&limit>0&&g.value>limit,soldNow};
+  }).filter(g=>g.over||(g.due>0&&g.soldNow)).sort((a,b)=>b.value-a.value);
+  const reason=g=>[g.over?'Supera su límite':'',g.due>0&&g.soldNow?'Tiene vencido y se le facturó este mes':''].filter(Boolean).join(' · ');
+  const cards=kpi('Por cobrar en 30 días',money(sum(open.filter(d=>d.days>-30&&d.days<=0))),'Facturas que vencen en los próximos 30 días','calendar',open.filter(d=>d.days>-30&&d.days<=0),true)+
+    kpi('Días de cobro',dso==null?'Sin base':dso+' días',dso==null?'No hubo facturación en el mes':'Saldo pendiente frente a lo facturado en '+monthName(period),'clock',rows)+
+    kpi('Clientes en riesgo',String(risk.length),'Sobre su límite o con vencido y compras nuevas','wallet',risk.flatMap(g=>g.docs));
+  const forecast=panel('Pronóstico de cobranza','Saldo abierto por fecha de vencimiento desde el '+day(end)+' · Selecciona un tramo para ver sus facturas',
+    bands.map((b,i)=>horizontal(b.name,money(sum(b.docs))+' · '+b.docs.length+' doc.',sum(b.docs),max,drill(b.name,b.docs),i===0)).join(''));
+  const riskTable=panel('Clientes en riesgo de crédito','Saldo frente al límite de crédito y facturación del mes · Selecciona un cliente para ver su cartera',
+    risk.length?'<div class="table-wrap"><table><thead><tr><th>Cliente</th><th class="num">Saldo</th><th class="num">Límite</th><th class="num">Vencido</th><th>Motivo</th></tr></thead><tbody>'+
+      risk.map(g=>{const open=drill(g.client,g.docs);return '<tr data-a="'+open+'"><td><button class="link name-link" data-a="'+open+'">'+esc(g.client)+'</button></td><td class="num">'+money(g.value)+'</td><td class="num">'+(g.limit!=null?money(g.limit):'Sin límite')+'</td><td class="num">'+money(g.due)+'</td><td>'+esc(reason(g))+'</td></tr>'}).join('')+
+      '</tbody></table></div>':'<p class="empty">Ningún cliente supera su límite ni compra con saldo vencido.</p>');
+  viewReport={...context('Cobranza','Corte '+day(end)),summary:[['Por cobrar en 30 días',sum(open.filter(d=>d.days>-30&&d.days<=0))],['Saldo vencido',sum(late)]],
+    tables:[{name:'Pronóstico',headers:['Tramo','Documentos','Importe'],amounts:[2],rows:bands.map(b=>[b.name,b.docs.length,sum(b.docs)])},
+      {name:'Clientes en riesgo',headers:['Cliente','Saldo','Límite','Vencido','Motivo'],amounts:[1,2,3],rows:risk.map(g=>[g.client,g.value,g.limit??0,g.due,reason(g)])}],
+    charts:[barChart('Pronóstico de cobranza',bands.map(b=>({name:b.name,value:sum(b.docs)})))]};
+  const worst=risk[0];
+  const says=(dso==null?'':'Cobras en promedio a '+dso+' días. ')+(worst?worst.client+' está en riesgo: '+reason(worst).toLowerCase()+'.':'Ningún cliente está en riesgo de crédito.');
+  $('dashboard').innerHTML='<p class="ora-says">'+face(30)+'<span>'+esc(says)+'</span></p><div class="kpis">'+cards+'</div><div class="panels">'+forecast+'</div>'+riskTable;
+}
 function lastDay(){if(data.cutoff)return data.cutoff;const d=monthDate($('period').value);d.setUTCMonth(d.getUTCMonth()+1,0);return d.toISOString().slice(0,10)}
 const bounds=[5,10,15,20,25,31];
 const slices=rows=>bounds.map((end,i)=>rows.filter(r=>+r.issued.slice(-2)<=end && +r.issued.slice(-2)>(bounds[i-1]||0)));
@@ -185,6 +278,7 @@ function render(){
   const seller=sellerEnabled&&hasSeller?$('seller').value:'';
   const filtered=(moduleName==='ar'&&ledgerDocs?ledgerDocs:docs).filter(d=>d.currency===curr && (!branch || d.branch===branch) && (!seller||d.seller===seller));
   const isSales=moduleName==='sales';
+  if(moduleName==='ap'){renderPayables();return}
   const stock=moduleName==='inventory';
   for(const id of ['branch','currency']) $(id).parentElement.hidden=stock;
   for(const id of ['warehouse','category','stockProduct']) $(id).parentElement.hidden=!stock;
@@ -195,6 +289,7 @@ function render(){
   $('branch').parentElement.hidden=stock||!!data.branch||!!data.reportMonth;
   $('prodLabel').hidden=!isSales||!data.product.length;
   reportTabs(isSales,statementMode);
+  document.querySelectorAll('.quick-range [data-range=today],.quick-range [data-range="7d"]').forEach(b=>b.hidden=!isSales);
   viewReport=null;
   $('dashboard').dataset.module=moduleName;
   const count=[...$('secondaryFilters').querySelectorAll('select')].filter(s=>!s.parentElement.hidden && s.value).length;
@@ -224,7 +319,7 @@ function render(){
         'Plazo: '+(opts.lead??'según producto'),'Seguridad: '+(opts.safety??'según producto')].join(' · ')),currency:null,summary:r.summary,tables:r.tables,note:'Sugerencias para revisión humana.'};
       return;
     }
-    $('dashboard').innerHTML=renderInventory(data,{period,end:lastDay(),warehouse:$('warehouse').value,category:$('category').value,product:$('stockProduct').value},{esc,action,panel,show:showDetail,refresh:render,day});
+    $('dashboard').innerHTML=renderInventory(data,{view:inventoryTab,period,end:lastDay(),warehouse:$('warehouse').value,category:$('category').value,product:$('stockProduct').value},{esc,action,panel,show:showDetail,refresh:render,day});
     return;
   }
   let cards,panels,table,hero,evolution,says='';
@@ -252,6 +347,7 @@ function render(){
         (rows.length?'':'<p class="empty">Sin documentos para estos filtros.</p>'));
       return;
     }
+    if(salesTab==='margin'&&data.product_cost?.length){renderMargin(current,period,range);return}
     viewReport=documentReport('Ventas',current,range);
     viewReport.note=coverage;
     viewReport.summary.push(['Facturas netas sin impuestos',sum(current.filter(d=>d.sign===1))],['Notas de crédito',sum(current.filter(d=>d.sign<0))],['Comparativo '+rangeText(ranges.priorFirst,ranges.priorEnd),sum(prior)]);
@@ -259,10 +355,12 @@ function render(){
     const previous=sum(prior),growth=previous>0?(net-previous)/previous*100:null;
     const recon=invoices.length+(invoices.length===1?' factura ':' facturas ')+money(sum(invoices))+(credits.length?' − '+credits.length+(credits.length===1?' nota de crédito ':' notas de crédito ')+money(-sum(credits)):'')+' = '+money(net)+' sin impuestos';
     says=growth===null?'Este mes llevas '+money(net)+' en ventas netas.':'Este mes llevas '+money(net)+' en ventas netas, '+pct(Math.abs(growth))+(growth>=0?' más':' menos')+' que '+monthName(prev)+'.';
-    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),'chart',current,true,
+    hero=kpi('Facturación neta',money(net),growth===null?'Sin base de comparación':[pct(Math.abs(growth))+(growth>=0?' más que ':' menos que ')+monthName(prev),growth>=0?'good':'bad'],'chart',current,true,
       '<span class="recon">'+esc(recon)+'</span>'+provenance(net));
-    cards=kpi('Facturas emitidas',String(invoices.length),money(sum(invoices))+' sin impuestos','invoice',invoices)+
-      kpi('Notas de crédito',money(sum(credits)),credits.length+(credits.length===1?' documento de ajuste':' documentos de ajuste'),'credit',credits);
+    const priorInvoices=prior.filter(d=>d.sign===1).length,priorCredits=sum(prior.filter(d=>d.sign===-1));
+    const versus=(now,before,fmt)=>now===before?'Igual que '+monthName(prev):fmt(Math.abs(now-before))+(now>before?' más que ':' menos que ')+monthName(prev);
+    cards=kpi('Facturas emitidas',String(invoices.length),[versus(invoices.length,priorInvoices,String),invoices.length>=priorInvoices?'good':'bad'],'invoice',invoices)+
+      kpi('Notas de crédito',money(sum(credits)),[versus(Math.abs(sum(credits)),Math.abs(priorCredits),money),Math.abs(sum(credits))<=Math.abs(priorCredits)?'good':'caution'],'credit',credits);
     evolution=panel('Evolución de ventas',range+' frente a '+rangeText(ranges.priorFirst,ranges.priorEnd)+' · '+curr+(coverage?' · '+coverage:''),chart(current,prior,period,prev));
     panels=(data.reportMonth?'':panel('Ventas por sucursal','Participación en la facturación neta',distribution(current)))+
       (hasSeller?panel('Ventas por vendedor','Facturación neta · participación · facturas emitidas',sellerRanking(current)):'');
@@ -283,6 +381,7 @@ function render(){
       return;
     }
     const rows=balances(filtered,lastDay()),late=rows.filter(overdue),upcoming=rows.filter(d=>d.days<=0&&!d.payment),unapplied=rows.filter(d=>d.payment);
+    if(arTab==='collections'){renderCollections(filtered,rows,late,upcoming,period);return}
     const unit=data.firstMonth?' partidas':' documentos';
     const oldest=rows.filter(d=>d.bucket==='Más de 90 días');
     cards=kpi('Saldo pendiente',money(sum(rows)),rows.length+unit,'wallet',rows,true,
@@ -359,7 +458,32 @@ function fitNumbers(){
     while(el.scrollWidth>el.clientWidth&&size>12){size-=1;el.style.fontSize=size+'px'}
   });
 }
-new MutationObserver(()=>requestAnimationFrame(fitNumbers)).observe($('dashboard'),{childList:true});
+function activeFilters(){
+  return [...$('secondaryFilters').querySelectorAll('select')].some(s=>!s.parentElement.hidden&&s.value)||!!($('docSearch').value||$('docFrom').value||$('docUntil').value||$('docType').value);
+}
+function enhanceEmpty(){
+  if(!activeFilters())return;
+  document.querySelectorAll('#dashboard .empty').forEach(p=>{if(!p.querySelector('.reset-filters'))p.insertAdjacentHTML('beforeend',' <button type="button" class="link reset-filters">Quitar filtros</button>')});
+}
+$('dashboard').addEventListener('click',e=>{
+  if(!e.target.closest('.reset-filters'))return;
+  $('secondaryFilters').querySelectorAll('select').forEach(s=>{s.value='';s.dispatchEvent(new Event('change',{bubbles:true}))});
+  for(const id of ['docSearch','docFrom','docUntil','docType'])$(id).value='';
+  render();
+});
+document.querySelector('.quick-range').addEventListener('click',e=>{
+  const b=e.target.closest('[data-range]');
+  if(!b)return;
+  const months=[...$('period').options].map(o=>o.value).sort(),latest=months.at(-1),range=b.dataset.range;
+  const target=range==='prev'?(months.at(-2)??latest):latest;
+  if($('period').value!==target){$('period').value=target;$('period').dispatchEvent(new Event('change',{bubbles:true}))}
+  if((range==='today'||range==='7d')&&moduleName==='sales'){
+    const end=businessToday(),start=new Date(Date.parse(end)-(range==='7d'?6:0)*864e5).toISOString().slice(0,10);
+    salesTab='docs';$('docFrom').value=start;$('docUntil').value=end;render();
+  }
+  document.querySelectorAll('.quick-range [data-range]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+});
+new MutationObserver(()=>requestAnimationFrame(()=>{fitNumbers();enhanceEmpty()})).observe($('dashboard'),{childList:true});
 window.addEventListener('resize',()=>requestAnimationFrame(fitNumbers));
 if(viewTitles[requestedView])markLoading(requestedView);
 // Live mode reloads per section; keep the sidebar usable while this section's data is still arriving.
@@ -405,7 +529,7 @@ try{
   $('sync').textContent=(stale?'Datos del ':'Actualizado · ')+syncedAt.toLocaleString('es-VE',{dateStyle:'short',timeStyle:'short'})+(stale?' · pueden no reflejar Odoo hoy':'');
   options('period',[...new Set(docs.map(d=>d.issued.slice(0,7)))].sort().reverse().map(m=>[m,cap(monthName(m))]));
   options('branch',[['','Todas las sucursales'],...[...new Set(docs.map(d=>d.branch))].sort().map(b=>[b,b])]);
-  options('currency',[...new Set([...docs,...(ledgerDocs??[])].map(d=>d.currency))].sort().reverse().map(c=>[c,c]));
+  options('currency',[...new Set([...docs,...(ledgerDocs??[]),...(data.payable??[])].map(d=>d.currency))].sort().reverse().map(c=>[c,c]));
   if([...$('currency').options].some(o=>o.value===data.company[0].currency))$('currency').value=data.company[0].currency;
   options('product',[['','Todos los productos'],...data.product.map(p=>[p.id,p.name])]);
   if(data.modules.includes('inventory')){

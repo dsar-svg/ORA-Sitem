@@ -28,10 +28,10 @@ BOUNDARY = "cartography/VEN-ADM1-9469f09.geojson"
 ASSETS["/" + BOUNDARY] = (BOUNDARY, "application/geo+json")
 for font in ("source-sans-3",):
     ASSETS[f"/fonts/{font}.ttf"] = (f"fonts/{font}.ttf","font/ttf")
-ASSETS["/fonts/source-serif-4.woff2"] = ("fonts/source-serif-4.woff2","font/woff2")
+ASSETS["/fonts/geist.woff2"] = ("fonts/geist.woff2","font/woff2")
 for asset in ("exceljs.min.js","jspdf.umd.min.js","jspdf.plugin.autotable.min.js"):
     ASSETS["/vendor/" + asset] = ("vendor/" + asset, "text/javascript")
-PLANS = {"basico": ["sales"], "intermedio": ["sales","ar","clients","inventory"], "avanzado": ["sales","ar","clients","inventory"]}
+PLANS = {"basico": ["sales"], "intermedio": ["sales","ar","ap","clients","inventory"], "avanzado": ["sales","ar","ap","clients","inventory"]}
 PLAN = os.getenv("ORA_PLAN","intermedio").lower()
 if PLAN not in PLANS:
     raise ValueError("ORA_PLAN debe ser basico, intermedio o avanzado")
@@ -58,10 +58,9 @@ LOGIN_MESSAGES = {
     "conexion": "Odoo no pudo validar el acceso. Inténtalo de nuevo más tarde.",
 }
 ASSETS["/login.js"] = ("login.js","text/javascript")
-for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json"),
-                   *((f"ora/{n}.webp","image/webp") for n in ("ora","ora-128","ora-pensando","ora-pensando-128"))):
+for name, mime in (("icon.svg","image/svg+xml"),("manifest.webmanifest","application/manifest+json")):
     ASSETS["/" + name] = (name, mime)
-PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/fonts/source-serif-4.woff2","/icon.svg","/manifest.webmanifest","/ora/ora.webp")
+PUBLIC_PATHS = ("/style.css","/login.js","/fonts/source-sans-3.ttf","/fonts/geist.woff2","/icon.svg","/manifest.webmanifest")
 LOG = logging.getLogger("ora")
 AGENT_PLANS = {"intermedio","avanzado"}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
@@ -290,6 +289,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(502)
                     return
                 report["plan"] = PLAN
+                if PLAN == "basico":
+                    report.pop("product_cost", None)  # margin belongs to Gestión and Dirección
                 if view:
                     report.update(modules=PLANS[PLAN],firstMonth=earliest,lastMonth=latest)
                 body = json.dumps(report).encode()
@@ -325,7 +326,7 @@ class Handler(BaseHTTPRequestHandler):
             content = (ROOT / "web" / name).read_bytes()
             if path == "/":
                 # The plan is known here, so the sidebar paints with its final sections instead of after /api/demo.
-                for module in ("sales","ar","clients","inventory"):
+                for module in ("sales","ar","ap","clients","inventory"):
                     if module not in PLANS[PLAN]:
                         content = content.replace(f'data-module="{module}"'.encode(), f'data-module="{module}" hidden'.encode())
                 # Identity and source are known before /api/demo, so the header and profile paint final values.

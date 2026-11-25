@@ -42,6 +42,6 @@ def basic_scope(model, branch):
     for dim, source, field in [("customer","document","customer"),("product","line","product"),("seller","assignment","seller")]:
         visible = {r[field] for r in model[source]}
         model[dim] = [r for r in model[dim] if r["id"] in visible]
-    for key in ("credit_line","settlement","customer_profile","location"):
+    for key in ("credit_line","settlement","customer_profile","location","product_cost","payable"):
         model.pop(key,None)
     model["location"] = []
