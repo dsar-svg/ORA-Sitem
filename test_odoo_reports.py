@@ -3,7 +3,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from odoo_inventory import inventory
-from odoo_sales import receivables, drop_group, tax_key, bolivar_rate, payables, product_costs
+from odoo_sales import receivable_sellers, receivables, drop_group, tax_key, bolivar_rate, payables, product_costs
 from erp_auth import ProviderUnavailable
 
 
@@ -26,6 +26,14 @@ class LiveReportsTests(TestCase):
         reader.related.return_value=[]
         with self.assertRaises(PermissionError):
             receivables(reader,data,"2026-01-01","2026-01-31")
+
+    def test_receivables_carry_the_invoice_seller_only(self):
+        reader = Mock()
+        reader.related.return_value = [dict(id=90,move_type="out_invoice",invoice_user_id=[7,"Ana"]),
+                                       dict(id=91,move_type="entry",invoice_user_id=[8,"Caja"])]
+        data = dict(arDocument=[dict(id="10",move="90"),dict(id="12",move="91")])
+        receivable_sellers(reader,data)
+        self.assertEqual([d.get("seller") for d in data["arDocument"]],["7",None])
 
     def test_group_company_sales_are_excluded_by_tax_id(self):
         self.assertEqual(tax_key("J-050119373-8"),tax_key("J501193738"))

@@ -214,6 +214,26 @@ La prueba admite contraseñas locales de Odoo. Para cuentas con inicio federado 
 
 ## Piloto completo de Odoo 17 en EasyPanel
 
+### Roles
+
+Cada usuario tiene un rol que decide qué secciones ve y qué datos recibe. El servidor aplica el filtro, así que el navegador nunca recibe lo que el rol no permite.
+
+| Rol | Clave | Secciones | Datos |
+|---|---|---|---|
+| Dirección | `direccion` | Todas | Toda la empresa, con costo, margen y pagos |
+| Gerente de ventas | `ventas` | Ventas, Clientes, Cobrar, Inventario | Todo el equipo comercial, con margen; sin compras ni pagos |
+| Vendedor | `vendedor` | Ventas, Clientes, Cobrar, Inventario | Solo sus facturas, sus clientes y su cartera; sin costos |
+| Cobranza | `cobranza` | Cobrar, Clientes | Toda la cartera; sin costos |
+| Compras y almacén | `compras` | Inventario, Pagar | Existencias y proveedores; sin ventas por cliente |
+
+Gestión (`intermedio`) incluye Dirección, Vendedor y Cobranza. Dirección (`avanzado`) incluye los cinco. Básico no usa roles.
+
+```
+ORA_ROLES=ana@empresa.com:direccion,luis@empresa.com:vendedor,maria@empresa.com:cobranza
+```
+
+Sin `ORA_ROLES` todos los usuarios son Dirección. Con la variable, un usuario que no aparezca en la lista recibe Vendedor, el rol más limitado. El vendedor se identifica con su usuario de Odoo: ORA filtra las facturas donde él es el vendedor (`invoice_user_id`). Un rol desconocido o fuera del plan detiene el arranque con un mensaje claro. Ora, el asistente, respeta los mismos límites y sugiere preguntas propias de cada rol. En la demo local, el menú de perfil tiene un selector **Ver como** para mostrar cada rol a un prospecto.
+
 El servicio App construye el Dockerfile y recibe tráfico HTTP en el puerto interno 8765 detrás del dominio HTTPS. Conserva la URL, la base y los correos de acceso de tu instalación. Para la compañía B usa `ODOO_COMPANY_ID=9` y `ORA_PLAN=intermedio`. `ORA_SALES_MONTH=2026-10` activa los reportes en vivo y selecciona octubre al entrar. El selector ofrece desde `ORA_START_MONTH` (enero de 2026 por defecto) hasta el mes actual en Caracas. Cada sección consulta Odoo bajo la sesión del usuario.
 
 Ventas utiliza los importes contabilizados en la moneda del documento y las líneas para el filtro por producto. Cobranza utiliza las partidas contables por cobrar, sus vencimientos y conciliaciones en la moneda de cada partida hasta el corte. Clientes reúne las fichas de los terceros presentes en las ventas consultadas y la cartera. El mapa usa las coordenadas registradas. Inventario agrupa los movimientos ejecutados por producto y almacén y reconstruye apertura y cierre en unidades base. Las ubicaciones internas sin almacén asociado aparecen con su propio nombre.

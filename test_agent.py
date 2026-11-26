@@ -94,14 +94,27 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class StaffAgentTests(unittest.TestCase):
-    def test_staff_cannot_reach_costs_or_purchases(self):
+class RoleAgentTests(unittest.TestCase):
+    def book(self, key, seller=None):
+        from roles import ROLES
         calls = []
         reader = NS(scope=lambda shared=False: [], call=lambda m, meth, kw: calls.append(kw) or [])
-        book = agent.Book({"company": [{"name": "E", "currency": "USD"}]}, reader, manager=False)
-        with self.assertRaises(ValueError):
-            book.consultar_odoo("purchase.order", "search_read", "[]", [], [], "", 5)
-        with self.assertRaises(ValueError):
-            book.consultar_odoo("product.product", "search_read", "[]", ["standard_price"], [], "", 5)
-        book.consultar_odoo("account.move", "search_read", '[["move_type","=","in_invoice"]]', ["name"], [], "", 5)
+        return agent.Book({"company": [{"name": "E", "currency": "USD"}]}, reader, role=ROLES[key], seller=seller), calls
+
+    def test_each_role_reads_its_side_of_odoo(self):
+        seller, calls = self.book("vendedor", "7")
+        for model, fields in (("purchase.order", []), ("account.payment", []), ("product.product", ["standard_price"])):
+            with self.assertRaises(ValueError):
+                seller.consultar_odoo(model, "search_read", "[]", fields, [], "", 5)
+        seller.consultar_odoo("account.move", "search_read", '[["move_type","=","in_invoice"]]', ["name"], [], "", 5)
         self.assertIn(["move_type", "in", ["out_invoice", "out_refund"]], calls[-1]["domain"])
+        self.assertIn(["invoice_user_id", "=", 7], calls[-1]["domain"])
+        buyer, calls = self.book("compras")
+        with self.assertRaises(ValueError):
+            buyer.consultar_odoo("sale.order", "search_read", "[]", [], [], "", 5)
+        buyer.consultar_odoo("product.product", "search_read", "[]", ["standard_price"], [], "", 5)
+        buyer.consultar_odoo("account.move", "search_read", "[]", ["name"], [], "", 5)
+        self.assertIn(["move_type", "in", ["in_invoice", "in_refund"]], calls[-1]["domain"])
+        collector, calls = self.book("cobranza")
+        collector.consultar_odoo("account.payment", "search_read", "[]", ["name"], [], "", 5)
+        self.assertIn(["partner_type", "in", ["customer"]], calls[-1]["domain"])

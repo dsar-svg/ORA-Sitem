@@ -890,3 +890,6 @@ body,table,.kpi strong,.hrow b,td{font-variant-numeric:tabular-nums}
   .profile-menu{inset:calc(100% + 8px) 0 auto auto}
   main>header{padding-right:64px}
 }
+/* Demo role switch in the profile menu */
+.demo-role{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px 10px;margin-bottom:4px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted)}
+.demo-role select{font:inherit;color:var(--ink);background:var(--white);border:1px solid var(--line);border-radius:4px;padding:5px 6px}

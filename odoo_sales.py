@@ -134,7 +134,7 @@ def receivables(reader,data,start,end):
             continue
         pid, name = r["partner_id"] or (0,"Sin cliente")
         names[str(pid)] = name
-        items[r["id"]] = dict(id=str(r["id"]),number=r["move_id"][1],customer=str(pid),currency=r["currency_id"][1],
+        items[r["id"]] = dict(id=str(r["id"]),move=str(r["move_id"][0]),number=r["move_id"][1],customer=str(pid),currency=r["currency_id"][1],
                               issued=r["date"],due=r["date_maturity"] or r["date"],state="posted",
                               kind="invoice" if signed>0 else "credit",gross=abs(signed),ledger=True,
                               payment=bool(r["payment_id"]) and signed<0)
@@ -252,7 +252,17 @@ def credit_limits(reader,data,ids):
         pass  # Users without access to credit limits still get the rest of the report.
 
 
-def sales_report(host,account,month,view=None):
+def receivable_sellers(reader,data):
+    """Marks each receivable item with the seller of its invoice, for the Vendedor role. Payments and other entries stay unmarked."""
+    moves = {int(d["move"]) for d in data.get("arDocument",[])}
+    sellers = {str(r["id"]):str(r["invoice_user_id"][0]) for r in reader.related("account.move","move_type invoice_user_id",moves)
+               if r["invoice_user_id"] and r["move_type"] in ("out_invoice","out_refund")}
+    for d in data.get("arDocument",[]):
+        if d["move"] in sellers:
+            d["seller"] = sellers[d["move"]]
+
+
+def sales_report(host,account,month,view=None,sellers=False):
     first = date.fromisoformat(month+"-01")
     start = (first-timedelta(days=1)).replace(day=1)
     today = datetime.now(CARACAS).date()
@@ -281,6 +291,8 @@ def sales_report(host,account,month,view=None):
         receivables(reader,data,first.isoformat(),end.isoformat())
     if view in (None,"sales","ar","clients"):
         drop_group(reader,data,company_vats)
+    if sellers and data.get("arDocument"):
+        receivable_sellers(reader,data)
     if view=="clients":
         profiles(reader,data)
     elif view=="ar":

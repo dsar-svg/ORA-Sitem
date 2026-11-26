@@ -18,6 +18,7 @@ from datetime import date, datetime
 from model import SCHEMA, read_model, sync
 from inventory_view import slim_inventory, cut_moves
 from agent import ATTACHMENT_TYPES, Book, AgentUnavailable, ask
+from roles import ROLES, PLAN_ROLES, assignments, role_of, scoped
 import calendar
 
 ROOT = Path(__file__).resolve().parent
@@ -90,24 +91,25 @@ class ReportCache:
 
 REPORTS = ReportCache()
 AGENT_PLANS = {"intermedio","avanzado"}
-# Management role: who sees product cost (Margen), payables and the purchase side in Ora. Unset means every seat,
-# which keeps single-manager pilots working; list the managers' emails once sellers or staff get access.
-MANAGERS = {e.strip().casefold() for e in os.getenv("ORA_MANAGERS","").split(",") if e.strip()} or None
+ROLE_TABLE = assignments(PLAN)
 
 
-def is_manager(user):
-    return MANAGERS is None or (user or "").casefold() in MANAGERS
+def role_for(user, account=None, asked=None):
+    """The seat's role and seller id. Only the local demo, with synthetic data and no seats, may switch roles to show them."""
+    if asked in PLAN_ROLES[PLAN] and not ERP and not USERS:
+        role, _ = role_of(user, {(user or "").casefold(): (asked, None)}, PLAN, PLANS[PLAN])
+        return role, "01"
+    role, seller = role_of(user, ROLE_TABLE, PLAN, PLANS[PLAN])
+    return role, seller or (str(account.uid) if account and account.uid else None)
 
 
-def modules_for(user):
-    return [m for m in PLANS[PLAN] if m != "ap" or is_manager(user)]
+def modules_for(user, account=None, asked=None):
+    return list(role_for(user, account, asked)[0].modules)
 
 
-def for_role(report, user):
-    """A shallow copy without what only management may see; the cached report itself is left untouched."""
-    if is_manager(user) and PLAN != "basico":
-        return report
-    return {k: v for k, v in report.items() if k not in ("product_cost", "payable")}
+def for_role(report, user, account=None, asked=None):
+    role, seller = role_for(user, account, asked)
+    return {**scoped(report, role, seller), "role": {"key": role.key, "name": role.name}}
 AGENT_READY = bool(os.getenv("OPENAI_API_KEY"))
 # Inline style attributes carry bar widths and theme tokens; scripts stay same-origin only.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
@@ -200,6 +202,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(size))
             question, month = body["question"].strip(), body["month"]
             history = [{"role":m["role"],"content":m["content"]} for m in body.get("history",[])][-12:]
+            asked = body.get("role") if isinstance(body.get("role"), str) else None
             files = [{"name":str(f["name"])[:120],"type":f["type"],"data":f["data"]} for f in body.get("files",[])]
             if len(files)>3 or any(f["type"] not in ATTACHMENT_TYPES or not isinstance(f["data"],str) for f in files)                     or sum(len(f["data"]) for f in files)>7_000_000:
                 raise ValueError()
@@ -208,9 +211,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError()
         except (ValueError, KeyError, TypeError, AttributeError):
             return answer(400, "La pregunta no es válida.")
+        role, seller = role_for(user, account, asked)
         if SALES_MONTH:
             try:
-                data = sales_report(ERP.host, account, month, "clients")
+                data = sales_report(ERP.host, account, month, "clients", sellers=role.own)
             except LoginDenied:
                 return answer(401, "Tu sesión de Odoo terminó. Vuelve a iniciar sesión.")
             except PermissionError:
@@ -223,13 +227,13 @@ class Handler(BaseHTTPRequestHandler):
             year, number = map(int, month.split("-"))
             data["cutoff"] = f"{month}-{calendar.monthrange(year,number)[1]:02d}"
         try:
-            book = Book(data, Reader(ERP.host, account) if SALES_MONTH else None, manager=is_manager(user))
+            book = Book(scoped(data, role, seller), Reader(ERP.host, account) if SALES_MONTH else None, role=role, seller=seller)
             text, documents, tools, usage = ask(book, question, history, datetime.now(CARACAS).date().isoformat(), month, attachments=files)
         except AgentUnavailable as error:
             return answer(503, str(error))
         except LoginDenied:
             return answer(401, "Tu sesión de Odoo terminó. Vuelve a iniciar sesión.")
-        LOG.info("Agente · %s · mes %s · herramientas %s · tokens %s", user, month, ",".join(tools) or "-", usage)
+        LOG.info("Agente · %s · %s · mes %s · herramientas %s · tokens %s", user, role.key, month, ",".join(tools) or "-", usage)
         self.reply(200, json.dumps({"answer":text,"documents":documents,"files":book.files}, ensure_ascii=False).encode(), "application/json")
 
     def post(self):
@@ -300,11 +304,13 @@ class Handler(BaseHTTPRequestHandler):
         if user is None:
             self.reply(401,**{"WWW-Authenticate":'Basic realm="ORA piloto", charset="UTF-8"'})
             return
-        if path=="/restock.js" and "inventory" not in PLANS[PLAN]:
+        asked = parse_qs(urlsplit(self.path).query).get("rol",[None])[0]
+        modules = modules_for(user, account, asked)
+        if path=="/restock.js" and "inventory" not in modules:
             self.reply(403)
             return
         if path == "/api/moves":
-            if "inventory" not in PLANS[PLAN]:
+            if "inventory" not in modules:
                 self.reply(403)
                 return
             options = parse_qs(urlsplit(self.path).query)
@@ -349,14 +355,14 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     self.reply(400)
                     return
-                if view is not None and view not in modules_for(user):
+                if view is not None and view not in modules:
                     self.reply(403)
                     return
                 key = (account.login, ERP.company_id, month, view)
                 try:
                     report = REPORTS.get(key)
                     if report is None:
-                        report = sales_report(ERP.host, account, month, view)
+                        report = sales_report(ERP.host, account, month, view, sellers=role_for(user, account)[0].own)
                         REPORTS.put(key, report, month < latest)
                 except LoginDenied:
                     SESSIONS.account(self.headers.get("Cookie",""), logout=True)
@@ -370,9 +376,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(502)
                     return
                 report["plan"] = PLAN
-                payload = for_role(report, user)  # cost and payables only for management (and never in Básico)
+                payload = for_role(report, user, account)  # only what the role may see; the cached report stays whole
                 if view:
-                    payload = {**payload, "modules": modules_for(user), "firstMonth": earliest, "lastMonth": latest}
+                    payload = {**payload, "modules": modules, "firstMonth": earliest, "lastMonth": latest}
                 # Inventory leaves daily rows and move lists on the server; the browser asks /api/moves per product.
                 body = json.dumps(slim_inventory(payload) if view == "inventory" else payload).encode()
                 # Inventory snapshots carry one row per product, warehouse and day; JSON compresses ~15x.
@@ -381,7 +387,6 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.reply(200, body, "application/json")
                 return
-            modules = modules_for(user)
             model = read_model(DATABASE, include_inventory="inventory" in modules)
             if ERP and any(c["source"]!="demo-v1" for c in model["company"]):
                 # Real snapshots require an explicit ERP company and record-permission mapping.
@@ -400,7 +405,7 @@ class Handler(BaseHTTPRequestHandler):
                 model["history"] = {"start":h["start_date"],"through":h["through_date"],
                                     "opening":bool(h["zero_opening"]),"applications":bool(h["applications_complete"])}
             model.update(modules=modules, plan=PLAN)
-            model = for_role(model, user)
+            model = for_role(model, user, account, asked)
             if "inventory" in modules:
                 model = slim_inventory(model)
             content = json.dumps(model, ensure_ascii=False).encode()
@@ -411,14 +416,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 # The plan is known here, so the sidebar paints with its final sections instead of after /api/demo.
                 for module in ("sales","ar","ap","clients","inventory"):
-                    if module not in modules_for(user):
+                    if module not in modules:
                         content = content.replace(f'data-module="{module}"'.encode(), f'data-module="{module}" hidden'.encode())
                 # Identity and source are known before /api/demo, so the header and profile paint final values.
                 plan_name = {"basico":"Básico","intermedio":"Intermedio","avanzado":"Avanzado"}[PLAN]
                 fills = {'<span>Perfil de demo</span>': f'<span>{escape(user)}</span>' if user and user != "demo-local" else None,
                          '<strong id="company">ORA</strong>': f'<strong id="company">{escape(account.company)}</strong>' if account else None,
                          '<span class="badge"></span>': f'<span class="badge">{"Odoo" if SALES_MONTH else "Demo"} · {plan_name}</span>',
-                         '<body>': '<body data-live="1">' if SALES_MONTH else None,
+                         '<body>': '<body data-home="'+modules[0]+'" data-role="'+role_for(user, account, asked)[0].key+'"'+(' data-live="1"' if SALES_MONTH else '')+(' data-demo-roles="'+",".join(r for r in ROLES if r in PLAN_ROLES[PLAN])+'"' if not ERP and not USERS and PLAN!="basico" else '')+'>',
                          '<button data-section="ora" hidden>': '<button data-section="ora">' if PLAN in AGENT_PLANS and AGENT_READY else None}
                 for marker, value in fills.items():
                     if value:

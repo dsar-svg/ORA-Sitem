@@ -30,6 +30,7 @@ class Account:
     company: str
     company_id: int = 0
     upstream_cookie: str = field(default="", repr=False)
+    uid: int = 0  # Odoo user id: the seller on invoices (invoice_user_id) for the Vendedor role
 
 
 class OdooLogin:
@@ -90,7 +91,7 @@ class OdooLogin:
         if not company:
             raise LoginDenied()
         token = cookie.get("session_id")
-        return Account(login,company["name"],int(cid),token.coded_value if token else "")
+        return Account(login,company["name"],int(cid),token.coded_value if token else "",info["uid"])
 
 
 def configured_provider(root, plan):

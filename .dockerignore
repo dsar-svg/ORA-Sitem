@@ -6,6 +6,7 @@
 !demo.py
 !erp_auth.py
 !inventory_view.py
+!roles.py
 !model.py
 !odoo_sales.py
 !odoo_inventory.py

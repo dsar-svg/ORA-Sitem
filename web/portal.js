@@ -37,10 +37,10 @@ const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
 const day = s => s.split('-').reverse().join('/');
 // Data reads in ink and sand; the action colour is reserved for what can be pressed.
 const colors = ['var(--data)','var(--muted)','var(--data-prev)'];
-let data, opener, docs, moduleName='sales', actions=[];
+let data, opener, docs, moduleName=document.body.dataset.home||'sales', actions=[];
 let ledgerDocs;
 const requested = new URLSearchParams(location.search);
-const requestedView = requested.get('view') || 'sales';
+const requestedView = requested.get('view') || document.body.dataset.home || 'sales';
 const viewTitles={sales:'Resumen de ventas',ar:'Cuentas por cobrar',ap:'Cuentas por pagar',clients:'Clientes',inventory:'Inventario'};
 // Loading keeps the shape of the report (line, KPIs, charts, table) so nothing jumps when data arrives.
 const loaderHTML='<div class="skeleton" role="status" aria-label="Cargando reporte"><i class="sk-line"></i><div class="sk-kpis"><i></i><i></i><i></i></div><div class="sk-panels"><i></i><i></i></div><div class="sk-table"><i></i><i></i><i></i><i></i></div></div>';
@@ -500,7 +500,7 @@ $('close').onclick=()=>$('detail').close();
 try{
   $('sync').classList.add('loading');
   const query=new URLSearchParams({view:requestedView});
-  if(requested.has('month'))query.set('month',requested.get('month'));
+  for(const key of ['month','rol'])if(requested.has(key))query.set(key,requested.get(key));
   // A stalled ERP read must end in a visible error, not an endless loader.
   const response=await fetch('/api/report?'+query,{signal:AbortSignal.timeout(180000)}).catch(e=>{throw Error(e.name==='TimeoutError'?'Odoo tardó demasiado en responder. Intenta de nuevo o elige otro mes.':'No se pudo conectar con el servidor.')});
   if(response.status===401 && !response.headers.has('WWW-Authenticate')){location.replace('/login');throw Error('Sesión expirada')}
@@ -530,7 +530,8 @@ try{
   $('company').textContent=data.company[0].name+(data.branch?' · '+data.branch:'');
   document.querySelector('.badge').textContent=(data.reportMonth?'Odoo':'Demo')+' · '+({basico:'Básico',intermedio:'Intermedio',avanzado:'Avanzado'})[data.plan];
   document.querySelector('footer span').textContent=data.reportMonth?'Fuente: Odoo':'Datos sintéticos de demostración';
-  document.querySelector('#accountMenu summary span').textContent=data.user==='demo-local'?'Perfil de demo':data.user;
+  document.querySelector('#accountMenu summary span').textContent=(data.user==='demo-local'?'Perfil de demo':data.user)+(data.role?' · '+data.role.name:'');
+  demoRoles(data.role?.key);
   document.querySelector('#accountMenu summary').title=data.user==='demo-local'?'':data.user;
   options('statementCustomer',[...data.customer].sort((a,b)=>a.name.localeCompare(b.name,'es')).map(c=>[c.id,c.name]));
   const syncedAt=new Date(data.synced),stale=Date.now()-syncedAt>12*36e5;
@@ -570,7 +571,7 @@ try{
   for(const id of ['leadDays','safetyUnits','stockPriority'])$(id).oninput=render;
   render();
   $('demandMonths').onchange=render;
-  initTour({user:data.company[0].id+'.'+data.user+'.'+data.plan,modules:data.firstMonth?[moduleName]:data.modules,
+  initTour({user:data.company[0].id+'.'+data.user+'.'+data.plan+'.'+(data.role?.key||''),modules:data.firstMonth?[moduleName]:data.modules,
     state:()=>({mod:moduleName,tab:moduleName==='sales'?salesTab:moduleName==='ar'?arTab:inventoryTab,
       salesTab,arTab,inventoryTab}),
     restore:s=>{moduleName=s.mod;salesTab=s.salesTab;arTab=s.arTab;inventoryTab=s.inventoryTab;render()},
@@ -582,6 +583,17 @@ try{
   $('dashboard').querySelector('.retry').addEventListener('click',()=>location.reload());
   if(location.search){const back=document.createElement('a');back.href='/';back.textContent='Volver a Ventas';$('dashboard').append(' ',back)}
   console.error(e)}finally{$('sync').classList.remove('loading');document.body.classList.remove('loading')}
+// Demo only: show a prospect what each role sees. Real seats get their role from the server and cannot switch.
+function demoRoles(current){
+  const keys=document.body.dataset.demoRoles?.split(',');
+  if(!keys||document.getElementById('demoRole'))return;
+  const names={direccion:'Dirección',ventas:'Gerente de ventas',vendedor:'Vendedor',cobranza:'Cobranza',compras:'Compras y almacén'};
+  const label=document.createElement('label');label.className='demo-role';label.textContent='Ver como ';
+  const pick=document.createElement('select');pick.id='demoRole';
+  for(const k of keys)pick.add(new Option(names[k],k,false,k===current));
+  pick.onchange=()=>{location.search='?rol='+pick.value};
+  label.append(pick);document.querySelector('.profile-menu').prepend(label);
+}
 function renderStatement(filtered,period){
   const currency=$('currency').value,id=$('statementCustomer').value,name=selected('statementCustomer');
   if(!id){$('dashboard').textContent='Selecciona un cliente.';return}

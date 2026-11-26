@@ -205,14 +205,43 @@ class LoginTests(unittest.TestCase):
         self.assertTrue(all(m["cut"]==cut["id"] for m in moves))
         self.assertEqual(self.request("/api/moves?cut="+cut["id"])[0],401)
 
-    def test_staff_without_management_role(self):
+    def test_roles_scope_what_each_seat_receives(self):
         cookie=self.login()[1]["Set-Cookie"].split(";")[0]
         full=json.loads(self.request("/api/report",cookie=cookie)[2])
+        self.assertEqual(full["role"]["key"],"direccion")  # no ORA_ROLES: every seat is Dirección
         self.assertIn("product_cost",full)
-        with patch("app.MANAGERS",{"gerente@example.test"}):
-            staff=json.loads(self.request("/api/report",cookie=cookie)[2])
-            page=self.request("/",cookie=cookie)[2]
-        self.assertNotIn("product_cost",staff)
-        self.assertNotIn("payable",staff)
-        self.assertNotIn("ap",staff["modules"])
-        self.assertIn(b'data-module="ap" hidden',page)
+        def as_role(entry):
+            with patch("app.ROLE_TABLE",app.assignments("avanzado",entry)):
+                return json.loads(self.request("/api/report",cookie=cookie)[2]),self.request("/",cookie=cookie)[2]
+        collector,page=as_role(self.email+":cobranza")
+        self.assertEqual(collector["modules"],["ar","clients"])
+        self.assertNotIn("product_cost",collector)
+        self.assertNotIn("payable",collector)
+        self.assertIn(b'data-module="sales" hidden',page)
+        self.assertIn(b'data-home="ar"',page)
+        seller,_=as_role(self.email+":vendedor:02")
+        self.assertNotIn("product_cost",seller)
+        self.assertEqual([s["id"] for s in seller["seller"]],["02"])
+        own={d["id"] for d in seller["document"]}
+        self.assertTrue(own and all(a["seller"]=="02" for a in seller["assignment"]))
+        self.assertTrue(all(s["document"] in own for s in seller["settlement"]))
+        self.assertTrue({d["customer"] for d in seller["document"]}>={c["id"] for c in seller["customer"]})
+        self.assertLess(len(own),len(full["document"]))
+        buyer,_=as_role(self.email+":compras")
+        self.assertEqual((buyer["modules"],buyer["document"]),(["ap","inventory"],[]))
+        self.assertIn("payable",buyer)
+        unlisted,_=as_role("otra@example.test:direccion")
+        self.assertEqual(unlisted["role"]["key"],"vendedor")  # seats left out of ORA_ROLES get the narrowest role
+        self.assertEqual(unlisted["document"],[])  # Odoo user 7 sold nothing in the demo data
+        self.assertEqual(self.request("/api/report?rol=direccion",cookie=cookie)[0],200)
+        with patch("app.ROLE_TABLE",app.assignments("avanzado",self.email+":cobranza")):
+            self.assertEqual(json.loads(self.request("/api/report?rol=direccion",cookie=cookie)[2])["role"]["key"],"cobranza")
+
+
+class RoleConfigTests(unittest.TestCase):
+    def test_roles_must_exist_and_belong_to_the_plan(self):
+        from roles import assignments
+        self.assertEqual(assignments("intermedio","A@x.com:Vendedor:5"),{"a@x.com":("vendedor","5")})
+        for plan,text in (("intermedio","a@x.com:compras"),("avanzado","a@x.com:jefe")):
+            with self.assertRaises(ValueError):
+                assignments(plan,text)

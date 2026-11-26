@@ -4,12 +4,36 @@ import { face } from './ora.js';
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const STORE = 'ora.chat.v1';  // sessionStorage: the conversation survives navigation but not closing the browser
-const topics = [
-  {title:'Ventas', icon:'chart', ask:'¿Cuánto vendí este mes frente al anterior y qué vendedor facturó más?'},
-  {title:'Cobranza', icon:'wallet', ask:'¿Quiénes me deben más vencido y desde cuándo?'},
-  {title:'Inventario', icon:'box', ask:'¿Qué productos tienen pocas existencias?'},
-  {title:'Compras', icon:'invoice', ask:'¿Cuánto le debo a proveedores y a quién más?'},
-];
+// Suggestions follow the seat's role (set by the server on <body>), so each person starts with their own day-to-day questions.
+const TOPICS = {
+  direccion: [
+    {title:'Ventas', icon:'chart', ask:'¿Cuánto vendí este mes frente al anterior y qué vendedor facturó más?'},
+    {title:'Cobranza', icon:'wallet', ask:'¿Quiénes me deben más vencido y desde cuándo?'},
+    {title:'Inventario', icon:'box', ask:'¿Qué productos tienen pocas existencias?'},
+    {title:'Compras', icon:'invoice', ask:'¿Cuánto le debo a proveedores y a quién más?'}],
+  ventas: [
+    {title:'Equipo', icon:'users', ask:'¿Cómo va cada vendedor este mes frente al anterior?'},
+    {title:'Clientes', icon:'chart', ask:'¿Qué clientes compraron menos que el mes pasado?'},
+    {title:'Margen', icon:'invoice', ask:'¿Qué productos dejan menos margen este mes?'},
+    {title:'Cobranza', icon:'wallet', ask:'¿Qué vendedor tiene más cartera vencida?'}],
+  vendedor: [
+    {title:'Mis ventas', icon:'chart', ask:'¿Cuánto llevo vendido este mes y cómo voy frente al mes pasado?'},
+    {title:'Por cobrar', icon:'wallet', ask:'¿Qué clientes míos tienen facturas vencidas?'},
+    {title:'Clientes', icon:'users', ask:'¿Qué clientes míos no me han comprado este mes?'},
+    {title:'Existencias', icon:'box', ask:'¿Qué productos tienen pocas existencias para vender?'}],
+  cobranza: [
+    {title:'Vencido', icon:'wallet', ask:'¿Quiénes deben más vencido y desde cuándo?'},
+    {title:'Esta semana', icon:'calendar', ask:'¿Qué facturas vencen en los próximos 7 días?'},
+    {title:'Estado de cuenta', icon:'invoice', ask:'Prepara en PDF el estado de cuenta del cliente que más debe.'},
+    {title:'Recordatorio', icon:'users', ask:'Redacta un recordatorio de pago cordial para el cliente con más días vencido.'}],
+  compras: [
+    {title:'Reponer', icon:'box', ask:'¿Qué tengo que reponer esta semana?'},
+    {title:'Proveedores', icon:'invoice', ask:'¿Cuánto le debo a proveedores y qué vence primero?'},
+    {title:'Pedidos', icon:'chart', ask:'¿Qué órdenes de compra siguen sin recibir?'},
+    {title:'Sin movimiento', icon:'calendar', ask:'¿Qué productos tienen existencias pero no se vendieron este mes?'}],
+};
+const topics = TOPICS[document.body.dataset.role] || TOPICS.direccion;
+const demoRole = new URLSearchParams(location.search).get('rol');
 const MAX_FILES = 3, MAX_BYTES = 5_000_000;
 let busy = false, attached = [], chat = [];
 try { chat = JSON.parse(sessionStorage.getItem(STORE)) || []; } catch {}
@@ -96,7 +120,7 @@ async function send(){
   chat.push(answer); render();
   try {
     const res = await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question,month:$('period').value,history:prior,files}),signal:AbortSignal.timeout(180000)});
+      body:JSON.stringify({question,month:$('period').value,history:prior,files,...(demoRole?{role:demoRole}:{})}),signal:AbortSignal.timeout(180000)});
     const data = await res.json().catch(()=>({error:'Respuesta inesperada del servidor.'}));
     if (!res.ok) throw new Error(data.error || 'No se pudo responder.');
     Object.assign(answer, {pending:false, text:data.answer, documents:data.documents, downloads:data.files});
